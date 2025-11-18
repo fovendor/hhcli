@@ -16,9 +16,9 @@ _cache_root = Path(user_cache_dir("hhcli"))
 
 
 if getattr(sys, "frozen", False):
-    BASE_PATH = Path(sys._MEIPASS) / "hhcli" / "ui"  # type: ignore[attr-defined]
+    BASE_PATH = Path(sys._MEIPASS) / "hhcli" / "ui" / "themes"  # type: ignore[attr-defined]
 else:
-    BASE_PATH = Path(__file__).parent
+    BASE_PATH = Path(__file__).parent / "themes"
 
 
 def _generate_random_id() -> str:
@@ -26,9 +26,9 @@ def _generate_random_id() -> str:
 
 
 class CssManager:
-    """Отвечает за генерацию и кэширование итогового CSS."""
+    """Собирает итоговый CSS из темы и пользовательских стилей и кэширует его"""
 
-    base_css: Path = BASE_PATH / "styles.tcss"
+    base_css: Path = BASE_PATH / "design_system.tcss"
     themes: dict[str, HHCliThemeBase] = {}
 
     def __init__(
@@ -133,7 +133,7 @@ class CssManager:
         self.refresh_css()
 
     def reload_themes(self) -> None:
-        """Перечитывает доступные темы с диска."""
+        """Перечитывает список доступных тем с диска"""
         current_name = getattr(self.theme, "_name", "hhcli-base")
         theme_classes = refresh_available_themes()
         self.themes = {name: theme_cls() for name, theme_cls in theme_classes.items()}

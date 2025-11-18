@@ -1,4 +1,4 @@
-"""Вспомогательные функции для получения версии пакета hhcli."""
+"""Утилиты для чтения версии пакета hhcli"""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ _VERSION_PATTERN = re.compile(r'^version\s*=\s*"([^"]+)"', re.MULTILINE)
 
 
 def get_version() -> str:
-    """Возвращает строку версии hhcli, предпочитая данные из pyproject.toml."""
+    """Возвращает строку версии hhcli и сначала пытается прочитать её из pyproject.toml"""
     try:
         return _read_version_from_pyproject()
     except (FileNotFoundError, RuntimeError):
         try:
             return metadata_version("hhcli")
         except PackageNotFoundError as exc:
-            raise RuntimeError("Не удалось определить версию hhcli.") from exc
+            raise RuntimeError("Не удалось определить версию hhcli") from exc
 
 
 def _read_version_from_pyproject() -> str:
-    """Извлекает значение версии напрямую из pyproject.toml."""
+    """Читает версию напрямую из pyproject.toml"""
     project_root = pathlib.Path(__file__).resolve().parents[1]
     pyproject_path = project_root / "pyproject.toml"
     content = pyproject_path.read_text(encoding="utf-8")

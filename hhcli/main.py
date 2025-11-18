@@ -6,7 +6,7 @@ from hhcli.ui.tui import HHCliApp
 from hhcli.version import get_version
 
 def run():
-    """Главная функция-запускатор и диспетчер команд."""
+    """Точка входа, которая запускает интерфейс и разбирает аргументы командной строки"""
     args = sys.argv[1:]
 
     if any(flag in args for flag in ("-v", "--version")):

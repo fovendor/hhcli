@@ -19,7 +19,7 @@ from textual.widgets import (
 )
 from textual.widgets._selection_list import Selection
 
-from ..database import (
+from ...database import (
     list_areas,
     list_professional_roles,
     load_profile_config,
@@ -27,8 +27,8 @@ from ..database import (
     save_profile_config,
     get_default_config,
 )
-from ..reference_data import ensure_reference_data
-from ..constants import ConfigKeys, LogSource
+from ...reference_data import ensure_reference_data
+from ...constants import ConfigKeys, LogSource
 
 COLUMN_WIDTH_MAX = 200
 
@@ -40,7 +40,7 @@ def _normalize(text: str | None) -> str:
 
 
 def _select_value(widget: Select) -> str | None:
-    """Return a plain value for Select widgets, normalizing the blank sentinel."""
+    """Возвращает значение виджета Select и приводит пустое значение к None"""
     value = widget.value
     if value is None or value is Select.BLANK:
         return None
@@ -48,7 +48,7 @@ def _select_value(widget: Select) -> str | None:
 
 
 def _set_select_value(widget: Select, value: str | None) -> None:
-    """Safely restore saved values to Select widgets, clearing when empty."""
+    """Восстанавливает значение Select и очищает поле, если данных нет"""
     if value:
         widget.value = value
     else:
@@ -96,7 +96,7 @@ class LayoutSectionDef:
 
 
 class AreaPickerDialog(ModalScreen[str | None]):
-    """Диалог выбора региона/города."""
+    """Диалог выбора региона или города"""
 
     BINDINGS = [
         Binding("escape", "cancel", "Отмена"),
@@ -190,7 +190,7 @@ class AreaPickerDialog(ModalScreen[str | None]):
 
 
 class RolePickerDialog(ModalScreen[list[str] | None]):
-    """Диалог выбора профессиональных ролей."""
+    """Диалог выбора профессиональных ролей"""
 
     BINDINGS = [
         Binding("escape", "cancel", "Отмена"),
@@ -284,7 +284,7 @@ class RolePickerDialog(ModalScreen[list[str] | None]):
 
 
 class ConfigUnsavedChangesDialog(ModalScreen[str | None]):
-    """Подтверждение выхода при наличии несохранённых изменений."""
+    """Диалог подтверждения выхода при несохранённых изменениях"""
 
     BINDINGS = [
         Binding("escape", "cancel", "Отмена"),
@@ -320,7 +320,7 @@ class ConfigUnsavedChangesDialog(ModalScreen[str | None]):
 
 
 class ConfigScreen(Screen):
-    """Экран для редактирования конфигурации профиля."""
+    """Экран редактирования конфигурации профиля"""
 
     BINDINGS = [
         Binding("escape", "cancel", "Назад"),
@@ -515,23 +515,21 @@ class ConfigScreen(Screen):
             yield Footer()
 
     def on_mount(self) -> None:
-        """При монтировании экрана удаляем глобальные биндинги выхода."""
+        """При монтировании временно отключаем глобальные биндинги выхода"""
         self._quit_binding_q = self.app._bindings.keys.pop("q", None)
         self._quit_binding_cyrillic = self.app._bindings.keys.pop("й", None)
 
         self.run_worker(self._load_data_worker, thread=True)
 
     def on_unmount(self) -> None:
-        """При размонтировании экрана восстанавливаем глобальные биндинги."""
+        """При размонтировании возвращаем глобальные биндинги"""
         if self._quit_binding_q:
             self.app._bindings.keys['q'] = self._quit_binding_q
         if self._quit_binding_cyrillic:
             self.app._bindings.keys['й'] = self._quit_binding_cyrillic
 
     def _load_data_worker(self) -> None:
-        """
-        Эта часть выполняется в фоновом потоке, загружает данные, не трогая виджеты.
-        """
+        """Работает в фоне и загружает данные, не взаимодействуя с виджетами"""
         profile_name = self.app.client.profile_name
         config = load_profile_config(profile_name)
         work_formats = self.app.dictionaries.get("work_format", [])
@@ -570,9 +568,7 @@ class ConfigScreen(Screen):
         areas: list[dict],
         roles: list[dict],
     ) -> None:
-        """
-        Эта часть выполняется в основном потоке, обновляет виджеты.
-        """
+        """Работает в основном потоке и наполняет форму данными"""
         defaults = get_default_config()
         self.query_one("#work_format", Select).set_options(
             [(item["name"], item["id"]) for item in work_formats]
@@ -732,7 +728,7 @@ class ConfigScreen(Screen):
         return max(min_value, min(max_value, value))
 
     def _current_form_config(self) -> dict[str, Any]:
-        """Возвращает текущее состояние формы в формате конфигурации."""
+        """Возвращает текущее состояние формы как словарь конфигурации"""
         def parse_list(text: str) -> list[str]:
             return [item.strip() for item in text.split(",") if item.strip()]
 
@@ -821,7 +817,7 @@ class ConfigScreen(Screen):
         self._update_roles_summary()
 
     def action_cancel(self) -> None:
-        """Закрыть экран, при необходимости спросив подтверждение."""
+        """Закрывает экран и при необходимости спрашивает подтверждение"""
         if not self._has_unsaved_changes():
             self.dismiss(False)
             return
@@ -834,7 +830,7 @@ class ConfigScreen(Screen):
         )
 
     def action_save_config(self) -> None:
-        """Собрать данные с формы и сохранить в БД."""
+        """Собирает данные с формы и сохраняет их в базе"""
         profile_name = self.app.client.profile_name
         config = self._current_form_config()
 

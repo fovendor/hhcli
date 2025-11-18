@@ -2,13 +2,13 @@ from enum import Enum
 
 
 class SearchMode(Enum):
-    """Режимы поиска вакансий."""
+    """Режимы поиска вакансий"""
     AUTO = "auto"
     MANUAL = "manual"
 
 
 class AppStateKeys:
-    """Ключи для таблицы состояния приложения app_state."""
+    """Ключи для таблицы состояния приложения app_state"""
     ACTIVE_PROFILE = "active_profile"
     AREAS_HASH = "areas_hash"
     AREAS_UPDATED_AT = "areas_updated_at"
@@ -18,7 +18,7 @@ class AppStateKeys:
 
 
 class ConfigKeys:
-    """Ключи для конфигурации профиля."""
+    """Ключи конфигурации профиля, которые сохраняем в БД"""
     TEXT_INCLUDE = "text_include"
     NEGATIVE = "negative"
     WORK_FORMAT = "work_format"
@@ -61,9 +61,7 @@ LAYOUT_WIDTH_KEYS: tuple[str, ...] = (
 )
 
 class ApiErrorReason:
-    """
-    Строковые идентификаторы причин ответа API при отклике на вакансию.
-    """
+    """Строковые идентификаторы причин, которые возвращает API при отклике"""
     APPLIED = "applied"
     ALREADY_APPLIED = "already_applied"
     TEST_REQUIRED = "test_required"
@@ -120,7 +118,7 @@ FAILED_STATUS_CODES: frozenset[str] = frozenset({"failed"})
 
 
 class LogSource:
-    """Источники для логирования в базу данных."""
+    """Список источников событий для логирования в базе"""
     API_CLIENT = "APIClient"
     OAUTH = "OAuth"
     SYNC_ENGINE = "SyncEngine"

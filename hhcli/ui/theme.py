@@ -54,7 +54,7 @@ def _iter_theme_files() -> list[Path]:
     return sorted(
         path
         for path in THEMES_DIR.glob("*.tcss")
-        if path.is_file()
+        if path.is_file() and path.stem != "design_system"
     )
 
 
@@ -131,14 +131,14 @@ def refresh_available_themes() -> dict[str, type["HHCliThemeBase"]]:
 
 @dataclass(slots=True)
 class ThemeDefinition:
-    """Упрощённое представление темы для внешнего использования."""
+    """Упрощённое представление темы для внешнего использования"""
 
     name: str
     colors: dict[str, str]
 
 
 class HHCliThemeBase:
-    """Базовый класс определения темы оформления."""
+    """Базовый класс темы оформления hhcli"""
 
     _name: ClassVar[str] = "hhcli-base"
     css_filename: ClassVar[str] = "base.tcss"
@@ -182,12 +182,12 @@ class HHCliThemeBase:
             return dict(colors)
 
     def to_css(self) -> str:
-        """Возвращает CSS-переменные темы."""
+        """Возвращает CSS-переменные темы"""
         return self.css
 
     @classmethod
     def definition(cls) -> ThemeDefinition:
-        """Возвращает сериализованное представление темы."""
+        """Возвращает сериализованное представление темы"""
         return ThemeDefinition(name=cls._name, colors=cls._load_colors())
 
 
@@ -195,6 +195,6 @@ AVAILABLE_THEMES: dict[str, type[HHCliThemeBase]] = get_available_themes()
 
 
 def list_themes() -> list[ThemeDefinition]:
-    """Возвращает список доступных тем."""
+    """Возвращает список доступных тем оформления"""
     themes = get_available_themes()
     return [theme.definition() for theme in themes.values()]

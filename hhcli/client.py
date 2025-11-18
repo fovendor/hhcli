@@ -19,14 +19,11 @@ REDIRECT_URI = "http://127.0.0.1:9037/oauth_callback"
 
 
 class AuthorizationPending(RuntimeError):
-    """Исключение о запуске повторной аутентификации."""
+    """Сигнализирует о необходимости повторной аутентификации"""
 
 
 class HHApiClient:
-    """
-    Клиент для взаимодействия с API HeadHunter.
-    Управляет аутентификацией и выполняет запросы.
-    """
+    """Клиент для API hh.ru, который берёт на себя авторизацию и сетевые вызовы"""
     def __init__(self):
         self.access_token = None
         self.refresh_token = None
@@ -50,7 +47,7 @@ class HHApiClient:
                 self.token_expires_at > datetime.now())
 
     def start_authorization_flow(self, *, reason: str | None = None) -> None:
-        """Запускает браузерную авторизацию в отдельном потоке."""
+        """Запускает браузерную авторизацию в отдельном потоке"""
         if not self.profile_name:
             raise AuthorizationPending(
                 "Профиль не загружен, авторизация невозможна."
@@ -107,7 +104,7 @@ class HHApiClient:
             self._auth_thread.start()
 
     def ensure_active_token(self) -> None:
-        """Гарантирует наличие рабочего access_token или инициирует авторизацию."""
+        """Проверяет токен и при необходимости инициирует повторную авторизацию"""
         if self.is_authenticated():
             return
         with self._auth_lock:
@@ -308,9 +305,7 @@ class HHApiClient:
     def search_vacancies(
             self, config: dict, page: int = 0, per_page: int = 50
     ):
-        """
-        Выполняет поиск вакансий по параметрам из конфигурации профиля.
-        """
+        """Выполняет поиск вакансий по конфигурации профиля и возвращает ответ API"""
         positive_keywords = config.get('text_include', [])
         positive_str = " OR ".join(f'"{kw}"' for kw in positive_keywords)
 
@@ -349,17 +344,17 @@ class HHApiClient:
         return self._request("GET", f"/vacancies/{vacancy_id}")
 
     def get_dictionaries(self):
-        """Загружает общие справочники hh.ru."""
+        """Запрашивает общие справочники hh.ru"""
         log_to_db("INFO", LogSource.API_CLIENT, "Запрос общих справочников...")
         return self._request("GET", "/dictionaries")
 
     def get_areas(self):
-        """Возвращает полный список регионов hh.ru."""
+        """Запрашивает полный список регионов hh.ru"""
         log_to_db("INFO", LogSource.API_CLIENT, "Запрос справочника регионов...")
         return self._request("GET", "/areas")
 
     def get_professional_roles(self):
-        """Возвращает справочник профессиональных ролей hh.ru."""
+        """Запрашивает справочник профессиональных ролей hh.ru"""
         log_to_db(
             "INFO", LogSource.API_CLIENT, "Запрос справочника профессиональных ролей..."
         )

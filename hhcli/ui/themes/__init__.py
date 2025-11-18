@@ -1,4 +1,4 @@
-"""Ресурсы тем для hhcli."""
+"""Путь к файлам тем для hhcli"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ import sys
 if getattr(sys, "frozen", False):
     THEMES_DIR = Path(sys._MEIPASS) / "hhcli" / "ui" / "themes"  # type: ignore[attr-defined]
 else:
-    THEMES_DIR = Path(__file__).parent
+    THEMES_DIR = Path(__file__).resolve().parent
 
 __all__ = ["THEMES_DIR"]

@@ -5,16 +5,14 @@ from textual.reactive import reactive
 from textual.widgets import Button
 
 class PaginationButton(Button):
-    """
-    Кнопки для виджета пагинации для полной изоляции стилей от стандартных кнопок.
-    """
+    """Отдельный тип кнопки пагинации, чтобы не смешивать стили со стандартными"""
     pass
 
 class Pagination(Horizontal):
-    """Виджет пагинации."""
+    """Виджет пагинации"""
 
     class PageChanged(Message):
-        """Сообщение о смене страницы."""
+        """Сообщение о смене страницы"""
         def __init__(self, page: int) -> None:
             super().__init__()
             self.page = page
@@ -32,12 +30,12 @@ class Pagination(Horizontal):
         self._rebuild_controls()
 
     def update_state(self, current: int, total: int) -> None:
-        """Обновляет состояние пагинации."""
+        """Обновляет состояние пагинации"""
         self.total_pages = total
         self.current_page = current
 
     def _rebuild_controls(self) -> None:
-        """Пересобирает кнопки управления."""
+        """Перестраивает набор кнопок управления"""
         # Используем .remove() для безопасного удаления, если виджет еще не смонтирован
         self.remove_children()
 

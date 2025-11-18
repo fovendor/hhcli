@@ -64,7 +64,7 @@ def _status_was_delivered(status: Any) -> bool:
 
 
 def get_default_config() -> dict[str, Any]:
-    """Возвращает стандартную конфигурацию поиска для нового профиля."""
+    """Возвращает базовую конфигурацию поиска, с которой стартует новый профиль"""
     
     default_cover_letter = """Здравствуйте!
 
@@ -254,7 +254,7 @@ professional_roles_catalog = Table(
 )
 
 def save_vacancy_to_cache(vacancy_id: str, vacancy_data: dict):
-    """Сохраняет JSON-данные вакансии в кэш в виде текста."""
+    """Сохраняет данные вакансии в кэше SQLite в виде текста JSON"""
     if not engine:
         return
 
@@ -278,7 +278,7 @@ def save_vacancy_to_cache(vacancy_id: str, vacancy_data: dict):
         connection.commit()
 
 def save_dictionary_to_cache(name: str, data: dict):
-    """Сохраняет справочник в кэш."""
+    """Сохраняет произвольный справочник в кэше"""
     if not engine:
         return
 
@@ -301,7 +301,7 @@ def save_dictionary_to_cache(name: str, data: dict):
         connection.commit()
 
 def get_dictionary_from_cache(name: str, max_age_days: int = 7) -> dict | None:
-    """Извлекает справочник из кэша, если он не устарел."""
+    """Возвращает справочник из кэша, если он моложе заданного порога"""
     if not engine:
         return None
 
@@ -317,10 +317,7 @@ def get_dictionary_from_cache(name: str, max_age_days: int = 7) -> dict | None:
         return None
 
 def get_vacancy_from_cache(vacancy_id: str) -> dict | None:
-    """
-    Извлекает данные вакансии из кэша, если они не старше 7 дней.
-    Возвращает dict или None.
-    """
+    """Возвращает данные вакансии из кэша, если запись свежее семи дней"""
     if not engine:
         return None
 
@@ -343,7 +340,7 @@ def _upsert_app_state(connection, key: str, value: str) -> None:
 
 
 def get_app_state_value(key: str) -> str | None:
-    """Возвращает значение из таблицы состояния приложения."""
+    """Возвращает значение из таблицы состояния приложения"""
     if not engine:
         return None
     with engine.connect() as connection:
@@ -351,14 +348,14 @@ def get_app_state_value(key: str) -> str | None:
         return connection.execute(stmt).scalar_one_or_none()
 
 def set_app_state_value(key: str, value: str) -> None:
-    """Сохраняет ключ-значение в таблицу состояния приложения."""
+    """Сохраняет пару ключ-значение в таблицу состояния приложения"""
     if not engine:
         return
     with engine.begin() as connection:
         _upsert_app_state(connection, key, value)
 
 def replace_areas(records: Sequence[dict[str, Any]], *, data_hash: str) -> None:
-    """Полностью заменяет таблицу регионов на переданные данные."""
+    """Полностью пересобирает таблицу регионов на основе переданных данных"""
     if not engine:
         return
     prepared = [
@@ -382,7 +379,7 @@ def replace_areas(records: Sequence[dict[str, Any]], *, data_hash: str) -> None:
         _upsert_app_state(connection, AppStateKeys.AREAS_UPDATED_AT, timestamp)
 
 def replace_professional_roles(records: Sequence[dict[str, Any]], *, data_hash: str) -> None:
-    """Полностью заменяет таблицу профессиональных ролей на переданные данные."""
+    """Полностью пересобирает таблицу профессиональных ролей по свежим данным"""
     if not engine:
         return
     prepared: list[dict[str, Any]] = []
@@ -422,7 +419,7 @@ def replace_professional_roles(records: Sequence[dict[str, Any]], *, data_hash: 
         )
 
 def list_areas() -> list[dict[str, Any]]:
-    """Возвращает список всех регионов в порядке сортировки."""
+    """Возвращает регионы в порядке сортировки, готовые к отображению"""
     if not engine:
         return []
     with engine.connect() as connection:
@@ -442,7 +439,7 @@ def list_areas() -> list[dict[str, Any]]:
         return [dict(row._mapping) for row in rows]
 
 def list_professional_roles() -> list[dict[str, Any]]:
-    """Возвращает все профессиональные роли в порядке категорий и ролей."""
+    """Возвращает роли с упорядочиванием по категориям и позициям внутри них"""
     if not engine:
         return []
     with engine.connect() as connection:
@@ -467,7 +464,7 @@ def list_professional_roles() -> list[dict[str, Any]]:
         return [dict(row._mapping) for row in rows]
 
 def get_area_full_name(area_id: str) -> str | None:
-    """Возвращает полное название региона по ID."""
+    """Возвращает полное название региона по его идентификатору"""
     if not engine:
         return None
     with engine.connect() as connection:
@@ -475,7 +472,7 @@ def get_area_full_name(area_id: str) -> str | None:
         return connection.execute(stmt).scalar_one_or_none()
 
 def get_professional_roles_by_ids(role_ids: Sequence[str]) -> list[dict[str, Any]]:
-    """Возвращает данные по списку ID профессиональных ролей, сохраняя порядок входных данных."""
+    """Возвращает список ролей по идентификаторам и сохраняет исходный порядок"""
     if not engine or not role_ids:
         return []
     normalized_ids = [str(rid) for rid in role_ids]
@@ -499,7 +496,7 @@ def init_db():
     ensure_schema_upgrades()
 
 def ensure_schema_upgrades() -> None:
-    """Гарантирует наличие новых колонок в существующей БД."""
+    """Создаёт недостающие колонки в существующей БД если их ещё нет"""
     if not engine:
         return
 
@@ -1051,7 +1048,7 @@ def get_active_profile_name() -> str | None:
         return connection.execute(stmt).scalar_one_or_none()
 
 def load_profile_config(profile_name: str) -> dict:
-    """Загружает полную конфигурацию из всех связанных таблиц."""
+    """Загружает полную конфигурацию профиля вместе со связанными таблицами"""
     with engine.connect() as connection:
         stmt_main = select(profile_configs).where(
             profile_configs.c.profile_name == profile_name)
@@ -1080,7 +1077,7 @@ def load_profile_config(profile_name: str) -> dict:
         return config
 
 def save_profile_config(profile_name: str, config: dict):
-    """Сохраняет полную конфигурацию в связанные таблицы."""
+    """Сохраняет конфигурацию профиля вместе со связанными таблицами"""
     with engine.connect() as connection, connection.begin():
         positive_keywords = config.pop(ConfigKeys.TEXT_INCLUDE, [])
         negative_keywords = config.pop(ConfigKeys.NEGATIVE, [])

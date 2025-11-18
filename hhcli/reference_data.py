@@ -125,7 +125,7 @@ def _flatten_professional_roles(payload: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def sync_areas(client: "HHApiClient") -> bool:
-    """Синхронизирует справочник регионов с API hh.ru. Возвращает True, если произошли изменения."""
+    """Синхронизирует справочник регионов с API hh.ru и сообщает об обновлении"""
     data = client.get_areas()
     payload_hash = _hash_payload(data)
     if payload_hash == get_app_state_value(AppStateKeys.AREAS_HASH):
@@ -138,7 +138,7 @@ def sync_areas(client: "HHApiClient") -> bool:
 
 
 def sync_professional_roles(client: "HHApiClient") -> bool:
-    """Синхронизирует справочник профессиональных ролей. Возвращает True, если были изменения."""
+    """Синхронизирует справочник профессиональных ролей и возвращает флаг изменений"""
     data = client.get_professional_roles()
     payload_hash = _hash_payload(data)
     if payload_hash == get_app_state_value(AppStateKeys.PROFESSIONAL_ROLES_HASH):
@@ -153,10 +153,7 @@ def sync_professional_roles(client: "HHApiClient") -> bool:
 
 
 def ensure_reference_data(client: "HHApiClient") -> dict[str, bool]:
-    """
-    Гарантирует наличие актуальных данных по регионам и профессиональным ролям.
-    Возвращает словарь с флагами обновления.
-    """
+    """Обновляет справочники регионов и ролей при необходимости и возвращает флаги обновления"""
     updated_areas = sync_areas(client)
     updated_roles = sync_professional_roles(client)
     return {"areas": updated_areas, "professional_roles": updated_roles}

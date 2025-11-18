@@ -6,7 +6,7 @@ authors = ["fovendor <fovendor@gmail.com>"]
 readme = "README.md"
 license = "MIT"
 packages = [{include = "hhcli"}]
-include = ["hhcli/ui/styles.tcss"]
+include = ["hhcli/ui/themes/design_system.tcss", "hhcli/ui/themes/*.tcss"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
