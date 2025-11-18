@@ -24,24 +24,67 @@
 
 ## Установка
 
-Убедитесь, что у вас установлен **Python 3.9+** и **pip**.
+### Linux
 
-Установка производится одной командой. Скрипт исключает конфликты с другими Python-пакетами в системе, установка всех зависимостей происходит в изолированное окружение с помощью `pipx`.
+#### Ubuntu / Debian / Mint (apt)
 
 ```bash
-bash <(curl -sSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/fovendor/hhcli/master/install.sh)
+sudo apt update && sudo apt install python3 python3-pip pipx git -y
+pipx install hhcli
 ```
 
-> **Примечание:** Если `pipx` отсутствует в системе, скрипт запросит пароль (`sudo`) для его установки. Выполнение скриптов из интернета несёт потенциальные риски, ознакомьтесь с [кодом скрипта](install.sh) перед запуском.
+#### Arch / Manjaro (pacman)
+
+```bash
+sudo pacman -Syu python python-pip pipx git
+pipx install hhcli
+```
+
+#### Fedora / RHEL / Rocky (dnf / yum)
+
+```bash
+sudo dnf install python3 python3-pip pipx git  # либо sudo yum install ...
+pipx install hhcli
+```
+
+#### Другие дистрибутивы
+
+- Установите Python ≥3.9 и `pipx` из стандартного репозитория.
+- Выполните `pipx install hhcli`.
+- Если `pipx` отсутствует, можно поставить локально: `pip install --user pipx && pipx ensurepath`.
+
+### Windows
+
+#### Установка Python и pipx
+
+1. Скачайте Python 3.9+ с [python.org](https://www.python.org/downloads/windows/) и поставьте галочку “Add Python to PATH”.
+2. Установите `pipx` (PowerShell или CMD, права администратора не нужны):
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install pipx
+python -m pipx ensurepath
+```
+
+#### Установка hhcli
+
+Перезапустите PowerShell (или CMD) и выполните:
+
+```powershell
+pipx install hhcli
+```
+
+#### Обновление / удаление
+
+- Обновить: `pipx install hhcli --force`
+- Удалить: `pipx uninstall hhcli`
 
 ## Удаление
 
-Для удаления приложения выполните команду:
+Используйте `pipx uninstall hhcli` (Windows и Linux) или, если ставили из исходников, удалите виртуальное окружение/пакет. Данные профиля лежат в:
 
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/fovendor/hhcli/master/install.sh) uninstall
-```
-Команда удаляет приложение, но не ваши данные. Для удаления всех данных (база данных, профили, кэш, отклики), удалите каталог `~/.local/share/hhcli`.
+- Linux: `~/.local/share/hhcli`
+- Windows: `%LOCALAPPDATA%\hhcli`
 
 ## Первый запуск и настройка
 
