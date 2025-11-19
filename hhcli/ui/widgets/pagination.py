@@ -1,4 +1,3 @@
-from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.reactive import reactive

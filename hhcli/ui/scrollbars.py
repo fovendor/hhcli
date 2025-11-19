@@ -9,7 +9,7 @@ from textual.scrollbar import ScrollBarRender
 
 
 class ThinScrollBarRender(ScrollBarRender):
-    """Scrollbar renderer that draws thinner glyphs inside the cell."""
+    """Рендер полос прокрутки, который рисует более тонкие глифы внутри ячейки."""
 
     HORIZONTAL_GLYPH = "▂"
     VERTICAL_GLYPH = "▋"
@@ -56,7 +56,10 @@ class ThinScrollBarRender(ScrollBarRender):
             position_ratio = position / (virtual_size - window_size)
             start_float = (size - thumb_size) * position_ratio
             thumb_start = max(0, min(size - 1, int(floor(start_float))))
-            thumb_end = max(thumb_start + 1, min(size, int(thumb_start + thumb_size)))
+            thumb_end = max(
+                thumb_start + 1,
+                min(size, int(thumb_start + thumb_size)),
+            )
 
             segments: list[Segment] = []
             for index in range(size):
@@ -69,7 +72,11 @@ class ThinScrollBarRender(ScrollBarRender):
                     segments.append(
                         _Segment(
                             char,
-                            _Style(bgcolor=back, color=bar, meta=foreground_meta),
+                            _Style(
+                                bgcolor=back,
+                                color=bar,
+                                meta=foreground_meta,
+                            ),
                         )
                     )
 

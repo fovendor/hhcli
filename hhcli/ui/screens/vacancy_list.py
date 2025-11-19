@@ -494,7 +494,7 @@ class VacancyListScreen(Screen):
         if self._pending_details_id != vacancy_id:
             return
 
-        salary_line = f"**Зарплата:** N/A\n\n"
+        salary_line = "**Зарплата:** N/A\n\n"
         salary_data = details.get("salary")
         if salary_data:
             s_from = salary_data.get("from")

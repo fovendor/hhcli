@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Iterable
 
 from ...database import (
     get_full_negotiation_history_for_profile,

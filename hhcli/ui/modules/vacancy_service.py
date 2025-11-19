@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ...constants import ConfigKeys, SearchMode
+from ...constants import SearchMode
 from ...database import load_profile_config
 from ..utils.formatting import normalize
 

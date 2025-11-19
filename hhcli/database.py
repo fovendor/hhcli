@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 from platformdirs import user_data_dir
 from sqlalchemy import (

@@ -3,7 +3,6 @@ from __future__ import annotations
 from textual.events import MouseDown
 from textual.widgets import SelectionList
 from textual.widgets._option_list import OptionList
-from textual.widgets._selection_list import Selection
 
 
 class VacancySelectionList(SelectionList[str]):

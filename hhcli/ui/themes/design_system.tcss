@@ -196,13 +196,12 @@ Footer > .footer--highlight-key {
 
 #history_chat_tab #history_chat_lower TextArea {
     margin: 0 1 0 0;
-    padding: 1;
     height: 100%;
     min-height: 100%;
     max-height: 100%;
     width: 100%;
     background: transparent;
-    border: none;
+    color: $text-strong;
 }
 
 #history_chat_placeholder_top,
