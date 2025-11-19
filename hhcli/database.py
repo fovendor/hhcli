@@ -210,6 +210,7 @@ negotiation_history = Table(
     Column("employer_name", String),
     Column("status", String),
     Column("reason", String),
+    Column("negotiation_id", String),
     Column("was_delivered", Boolean, nullable=False, server_default="0"),
     Column("applied_at", DateTime, nullable=False),
     UniqueConstraint("vacancy_id", "resume_id", name="uq_negotiation_vacancy_resume"),
@@ -748,7 +749,7 @@ WHERE profile_name = :profile_name
         history_columns = {row[1] for row in history_info}
 
         needs_rebuild = bool(history_info) and (
-            "id" not in history_columns or "resume_id" not in history_columns
+            "id" not in history_columns or "resume_id" not in history_columns or "negotiation_id" not in history_columns
         )
 
         if needs_rebuild:
@@ -765,6 +766,7 @@ CREATE TABLE negotiation_history_new (
     employer_name TEXT,
     status TEXT,
     reason TEXT,
+    negotiation_id TEXT,
     was_delivered INTEGER NOT NULL DEFAULT 0,
     applied_at DATETIME NOT NULL,
     UNIQUE(vacancy_id, resume_id)
@@ -779,7 +781,7 @@ CREATE TABLE negotiation_history_new (
                         """
 INSERT INTO negotiation_history_new (
     vacancy_id, profile_name, resume_id, resume_title,
-    vacancy_title, employer_name, status, reason, was_delivered, applied_at
+    vacancy_title, employer_name, status, reason, negotiation_id, was_delivered, applied_at
 )
 SELECT
     vacancy_id,
@@ -790,6 +792,7 @@ SELECT
     employer_name,
     status,
     reason,
+    NULL,
     0,
     applied_at
 FROM negotiation_history
@@ -944,6 +947,7 @@ def upsert_negotiation_history(negotiations: list[dict], profile_name: str):
                 "employer_name": vacancy.get('employer', {}).get('name'),
                 "status": status_value,
                 "reason": None,
+                "negotiation_id": str(item.get("id") or ""),
                 "was_delivered": 1 if _status_was_delivered(status_value) else 0,
                 "applied_at": datetime.fromisoformat(
                     item['updated_at'].replace("Z", "+00:00")),
@@ -957,6 +961,7 @@ def upsert_negotiation_history(negotiations: list[dict], profile_name: str):
                     "vacancy_title": values["vacancy_title"],
                     "employer_name": values["employer_name"],
                     "status": values["status"],
+                    "negotiation_id": values["negotiation_id"],
                     "was_delivered": values["was_delivered"],
                     "applied_at": values["applied_at"],
                 }

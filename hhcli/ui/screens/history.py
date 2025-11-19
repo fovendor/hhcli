@@ -9,7 +9,16 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.timer import Timer
-from textual.widgets import Footer, Header, LoadingIndicator, Markdown, Static
+from textual.widgets import (
+    Footer,
+    Header,
+    LoadingIndicator,
+    Markdown,
+    Static,
+    TabPane,
+    TabbedContent,
+    TextArea,
+)
 from textual.widgets._option_list import Option, OptionList
 
 from ...client import AuthorizationPending
@@ -61,6 +70,8 @@ class NegotiationHistoryScreen(Screen):
         self.html_converter.ignore_links = False
         self.html_converter.ignore_images = True
         self.html_converter.mark_code = True
+        self._quit_binding_q = None
+        self._quit_binding_cyrillic = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="history_screen"):
@@ -77,17 +88,33 @@ class NegotiationHistoryScreen(Screen):
                     yield Static(id="history_list_header")
                     yield HistoryOptionList(id="history_list")
                 with Vertical(id="history_details_panel", classes="pane") as details_panel:
-                    details_panel.border_title = "Детали"
+                    details_panel.border_title = "Детали и переписка"
                     details_panel.styles.border_title_align = "left"
-                    with VerticalScroll(id="history_details_pane"):
-                        yield Markdown(
-                            "[dim]Выберите отклик слева, чтобы увидеть детали.[/dim]",
-                            id="history_details",
-                        )
-                        yield LoadingIndicator(id="history_loader")
+                    with TabbedContent(initial="history_description_tab", id="history_details_tabs"):
+                        with TabPane("Описание вакансии", id="history_description_tab"):
+                            with VerticalScroll(id="history_details_pane"):
+                                yield Markdown(
+                                    "[dim]Выберите отклик слева, чтобы увидеть детали.[/dim]",
+                                    id="history_details",
+                                )
+                                yield LoadingIndicator(id="history_loader")
+                        with TabPane("Переписка", id="history_chat_tab"):
+                            with Vertical(id="history_chat_split"):
+                                with VerticalScroll(id="history_chat_upper"):
+                                    yield Static(
+                                        "[dim]Здесь будет информация о переписке.[/dim]",
+                                        id="history_chat_placeholder_top",
+                                    )
+                                with VerticalScroll(id="history_chat_lower"):
+                                    chat_input = TextArea(id="history_chat_input")
+                                    chat_input.placeholder = "Введите сообщение..."
+                                    chat_input.show_line_numbers = False
+                                    yield chat_input
             yield Footer()
 
     def on_mount(self) -> None:
+        self._quit_binding_q = self.app._bindings.keys.pop("q", None)
+        self._quit_binding_cyrillic = self.app._bindings.keys.pop("й", None)
         self._reload_history_layout_preferences()
         self._apply_history_workspace_widths()
         self._update_history_header()
@@ -99,6 +126,12 @@ class NegotiationHistoryScreen(Screen):
         self._apply_history_workspace_widths()
         self._update_history_header()
         self.query_one(HistoryOptionList).focus()
+
+    def on_unmount(self) -> None:
+        if self._quit_binding_q:
+            self.app._bindings.keys["q"] = self._quit_binding_q
+        if self._quit_binding_cyrillic:
+            self.app._bindings.keys["й"] = self._quit_binding_cyrillic
 
     def _reload_history_layout_preferences(self) -> None:
         config = load_profile_config(self.app.client.profile_name)

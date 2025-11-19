@@ -4,6 +4,8 @@ from typing import Optional
 
 from textual.app import App
 from textual.binding import Binding
+from textual.scrollbar import ScrollBar
+from textual.widgets import Input, TextArea
 
 from ..client import AuthorizationPending
 from ..constants import ConfigKeys, LogSource
@@ -16,12 +18,14 @@ from ..database import (
     set_active_profile,
 )
 from .css_manager import CssManager
+from .scrollbars import ThinScrollBarRender
 from .modules.dictionaries import cache_dictionaries as cache_dictionaries_service
 from .screens.profile_select import ProfileSelectionScreen
 from .screens.resume_select import ResumeSelectionScreen
 from .screens.search_mode import SearchModeScreen
 
 CSS_MANAGER = CssManager()
+ScrollBar.renderer = ThinScrollBarRender
 
 
 class HHCliApp(App):
@@ -172,6 +176,9 @@ class HHCliApp(App):
         self.dictionaries = cache_dictionaries_service(self.client, notify=self.notify)
 
     def action_quit(self) -> None:
+        focused = self.focused
+        if isinstance(focused, (Input, TextArea)):
+            return
         log_to_db("INFO", LogSource.TUI, "Пользователь запросил выход.")
         self.css_manager.cleanup()
         self.exit()

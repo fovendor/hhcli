@@ -288,6 +288,13 @@ class HHApiClient:
                 f"{e.response.status_code} {e.response.text}"
             )
             raise e
+        except requests.RequestException as e:
+            msg = (
+                "Ошибка соединения с hh.ru. "
+                "Проверьте подключение к интернету или повторите попытку позже."
+            )
+            log_to_db("ERROR", LogSource.API_CLIENT, f"{msg} Детали: {e}")
+            raise ConnectionError(msg) from e
 
     def get_my_resumes(self):
         return self._request("GET", "/resumes/mine")
@@ -451,6 +458,47 @@ class HHApiClient:
             log_to_db("ERROR", LogSource.API_CLIENT,
                       f"Сетевая ошибка при отклике на {vacancy_id}: {e}")
             return False, ApiErrorReason.NETWORK_ERROR
+
+    def get_negotiation(self, negotiation_id: str):
+        """Возвращает подробную информацию об отклике/приглашении"""
+        return self._request("GET", f"/negotiations/{negotiation_id}")
+
+    def get_negotiation_messages(
+        self,
+        negotiation_id: str,
+        *,
+        page: int = 0,
+        per_page: int = 100,
+        with_text_only: bool = False,
+    ):
+        """Получает страницу сообщений для указанного отклика"""
+        params = {
+            "page": page,
+            "per_page": per_page,
+            "with_text_only": str(bool(with_text_only)).lower(),
+        }
+        return self._request(
+            "GET",
+            f"/negotiations/{negotiation_id}/messages",
+            params=params,
+        )
+
+    def send_negotiation_message(self, negotiation_id: str, message: str) -> bool:
+        """Отправляет сообщение работодателю в рамках отклика"""
+        payload = {"message": message}
+        try:
+            self._request("POST", f"/negotiations/{negotiation_id}/messages", data=payload)
+            log_to_db(
+                "INFO", LogSource.API_CLIENT,
+                f"Сообщение отправлено в отклик {negotiation_id}."
+            )
+            return True
+        except requests.RequestException as e:
+            log_to_db(
+                "ERROR", LogSource.API_CLIENT,
+                f"Ошибка отправки сообщения в отклик {negotiation_id}: {e}"
+            )
+            return False
 
     def logout(self, profile_name: str):
         delete_profile(profile_name)
