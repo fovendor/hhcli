@@ -14,7 +14,7 @@ requests = "^2.31.0"
 flask = "^3.0.0"
 platformdirs = "^4.0.0"
 sqlalchemy = "^2.0.23"
-textual = "^0.43.0"
+textual = "*"
 html2text = "^2025.4.15"
 
 [tool.poetry.group.dev.dependencies]

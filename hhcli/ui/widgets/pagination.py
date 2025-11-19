@@ -3,9 +3,21 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Button
 
+
 class PaginationButton(Button):
-    """Отдельный тип кнопки пагинации, чтобы не смешивать стили со стандартными"""
-    pass
+    """Кнопка пагинации с дополнительной мета-информацией."""
+
+    def __init__(
+        self,
+        label: str,
+        *,
+        action: str,
+        target_page: int | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(label, **kwargs)
+        self.pagination_action = action
+        self.pagination_target_page = target_page
 
 class Pagination(Horizontal):
     """Виджет пагинации"""
@@ -35,8 +47,9 @@ class Pagination(Horizontal):
 
     def _rebuild_controls(self) -> None:
         """Перестраивает набор кнопок управления"""
-        # Используем .remove() для безопасного удаления, если виджет еще не смонтирован
-        self.remove_children()
+        # Удаляем предыдущие кнопки, если они есть
+        for child in list(self.children):
+            child.remove()
 
         if self.total_pages <= 1:
             return
@@ -53,8 +66,20 @@ class Pagination(Horizontal):
 
         widgets = []
         # Кнопки "назад"
-        widgets.append(PaginationButton("<<", id="first", disabled=self.current_page == 0))
-        widgets.append(PaginationButton("<", id="prev", disabled=self.current_page == 0))
+        widgets.append(
+            PaginationButton(
+                "<<",
+                action="first",
+                disabled=self.current_page == 0,
+            )
+        )
+        widgets.append(
+            PaginationButton(
+                "<",
+                action="prev",
+                disabled=self.current_page == 0,
+            )
+        )
 
         # Кнопки с номерами страниц
         for page in pages_to_render:
@@ -62,15 +87,28 @@ class Pagination(Horizontal):
             widgets.append(
                 PaginationButton(
                     str(page + 1),
-                    id=f"page_{page}",
+                    action="page",
+                    target_page=page,
                     variant="primary" if is_current else "default",
                     disabled=is_current,
                 )
             )
 
         # Кнопки "вперед"
-        widgets.append(PaginationButton(">", id="next", disabled=self.current_page >= self.total_pages - 1))
-        widgets.append(PaginationButton(">>", id="last", disabled=self.current_page >= self.total_pages - 1))
+        widgets.append(
+            PaginationButton(
+                ">",
+                action="next",
+                disabled=self.current_page >= self.total_pages - 1,
+            )
+        )
+        widgets.append(
+            PaginationButton(
+                ">>",
+                action="last",
+                disabled=self.current_page >= self.total_pages - 1,
+            )
+        )
         
         self.mount_all(widgets)
 
@@ -80,21 +118,21 @@ class Pagination(Horizontal):
             return
 
         event.stop()
-        button_id = event.button.id
-        if not button_id:
+        button = event.button
+        action = getattr(button, "pagination_action", None)
+        if not action:
             return
 
         actions = {
-            "first": 0, "last": self.total_pages - 1,
-            "prev": self.current_page - 1, "next": self.current_page + 1,
+            "first": 0,
+            "last": self.total_pages - 1,
+            "prev": self.current_page - 1,
+            "next": self.current_page + 1,
         }
-        target_page = actions.get(button_id)
+        target_page = actions.get(action)
 
-        if target_page is None and button_id.startswith("page_"):
-            try:
-                target_page = int(button_id.split("_")[1])
-            except (ValueError, IndexError):
-                return
+        if target_page is None and action == "page":
+            target_page = getattr(button, "pagination_target_page", None)
 
         if target_page is not None and 0 <= target_page < self.total_pages:
             self.post_message(self.PageChanged(page=target_page))

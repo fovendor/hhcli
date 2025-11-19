@@ -516,17 +516,19 @@ class ConfigScreen(Screen):
 
     def on_mount(self) -> None:
         """При монтировании временно отключаем глобальные биндинги выхода"""
-        self._quit_binding_q = self.app._bindings.keys.pop("q", None)
-        self._quit_binding_cyrillic = self.app._bindings.keys.pop("й", None)
+        bindings_map = self.app._bindings
+        self._quit_binding_q = bindings_map.key_to_bindings.pop("q", None)
+        self._quit_binding_cyrillic = bindings_map.key_to_bindings.pop("й", None)
 
         self.run_worker(self._load_data_worker, thread=True)
 
     def on_unmount(self) -> None:
         """При размонтировании возвращаем глобальные биндинги"""
+        bindings_map = self.app._bindings
         if self._quit_binding_q:
-            self.app._bindings.keys['q'] = self._quit_binding_q
+            bindings_map.key_to_bindings['q'] = self._quit_binding_q
         if self._quit_binding_cyrillic:
-            self.app._bindings.keys['й'] = self._quit_binding_cyrillic
+            bindings_map.key_to_bindings['й'] = self._quit_binding_cyrillic
 
     def _load_data_worker(self) -> None:
         """Работает в фоне и загружает данные, не взаимодействуя с виджетами"""

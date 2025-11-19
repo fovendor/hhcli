@@ -60,17 +60,36 @@ Markdown {
     border-title-align: left;
 }
 
-Markdown h1,
-Markdown h2,
-Markdown h3,
-Markdown h4,
-Markdown h5,
-Markdown h6 {
-    background: transparent;
+# Markdown заголовки
+MarkdownHeader {
     color: $text-strong;
-    border: none;
+    background: transparent;
+    text-style: bold;
+    margin: 1 0;
+}
+
+MarkdownH1 {
+    width: 80%;
+    margin: 2 0;
+    align: center middle;
     text-style: bold;
 }
+
+MarkdownH2 {
+    margin: 0 0 0 10;
+    width: 80%;
+    align: center middle;
+    background: $surface-elevated 50%;
+    border: round $text-strong;
+    padding: 1;
+    content-align: center middle;
+    text-style: bold;
+}
+
+MarkdownH3 {
+    text-style: bold;
+}
+
 
 LoadingIndicator,
 .loading-indicator {
@@ -140,11 +159,11 @@ Footer > .footer--highlight-key {
 }
 
 #details_panel {
-    padding: 0 0 0 0;
+    padding: 1;
 }
 
 #details_pane {
-    padding: 0 0 0 0;
+    padding: 1;
     background: transparent;
 }
 
@@ -166,6 +185,30 @@ Footer > .footer--highlight-key {
 
 #history_details_panel TabbedContent {
     height: 1fr;
+}
+
+#history_details_panel ContentTabs {
+    min-height: 3;
+    dock: top;
+    background: $surface-panel;
+}
+
+#history_details_panel ContentTabs Tab {
+    color: $text-base;
+    background: $surface-elevated;
+    padding: 0 1;
+    content-align-vertical: middle;
+}
+
+#history_details_panel ContentTabs Tab.-active {
+    background: $border-subtle;
+    color: $text-strong;
+    text-style: bold;
+}
+
+#history_details_panel ContentTabs Underline > .underline--bar {
+    background: $border-subtle;
+    color: $text-strong;
 }
 
 #history_details_panel TabPane {
@@ -195,13 +238,10 @@ Footer > .footer--highlight-key {
 }
 
 #history_chat_tab #history_chat_lower TextArea {
-    margin: 0 1 0 0;
     height: 100%;
     min-height: 100%;
     max-height: 100%;
     width: 100%;
-    background: transparent;
-    color: $text-strong;
 }
 
 #history_chat_placeholder_top,

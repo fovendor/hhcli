@@ -3,6 +3,7 @@ from __future__ import annotations
 import html2text
 from typing import Optional
 
+from rich.style import Style
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -20,6 +21,7 @@ from textual.widgets import (
     TextArea,
 )
 from textual.widgets._option_list import Option, OptionList
+from textual.widgets.text_area import TextAreaTheme
 
 from ...client import AuthorizationPending
 from ...constants import ConfigKeys, LogSource
@@ -109,29 +111,34 @@ class NegotiationHistoryScreen(Screen):
                                     chat_input = TextArea(id="history_chat_input")
                                     chat_input.placeholder = "Введите сообщение..."
                                     chat_input.show_line_numbers = False
+                                    self._apply_history_chat_text_area_theme(chat_input)
                                     yield chat_input
             yield Footer()
 
     def on_mount(self) -> None:
-        self._quit_binding_q = self.app._bindings.keys.pop("q", None)
-        self._quit_binding_cyrillic = self.app._bindings.keys.pop("й", None)
+        bindings_map = self.app._bindings
+        self._quit_binding_q = bindings_map.key_to_bindings.pop("q", None)
+        self._quit_binding_cyrillic = bindings_map.key_to_bindings.pop("й", None)
         self._reload_history_layout_preferences()
         self._apply_history_workspace_widths()
         self._update_history_header()
         self._refresh_history()
+        self._apply_history_chat_text_area_theme()
 
     def on_screen_resume(self) -> None:
         self.app.apply_theme_from_profile(self.app.client.profile_name)
         self._reload_history_layout_preferences()
         self._apply_history_workspace_widths()
         self._update_history_header()
+        self._apply_history_chat_text_area_theme()
         self.query_one(HistoryOptionList).focus()
 
     def on_unmount(self) -> None:
+        bindings_map = self.app._bindings
         if self._quit_binding_q:
-            self.app._bindings.keys["q"] = self._quit_binding_q
+            bindings_map.key_to_bindings["q"] = self._quit_binding_q
         if self._quit_binding_cyrillic:
-            self.app._bindings.keys["й"] = self._quit_binding_cyrillic
+            bindings_map.key_to_bindings["й"] = self._quit_binding_cyrillic
 
     def _reload_history_layout_preferences(self) -> None:
         config = load_profile_config(self.app.client.profile_name)
@@ -362,6 +369,34 @@ class NegotiationHistoryScreen(Screen):
             exclusive=True,
             thread=True,
         )
+
+    def _build_history_chat_theme(self) -> TextAreaTheme:
+        css_theme = getattr(self.app, "css_manager", None)
+        theme = getattr(css_theme, "theme", None)
+        colors = getattr(theme, "colors", {}) if theme else {}
+        background = colors.get("background2", "#3B4252")
+        text_color = colors.get("foreground3", "#ECEFF4")
+        theme_name = getattr(theme, "_name", "default")
+        return TextAreaTheme(
+            name=f"history-chat-{theme_name}",
+            base_style=Style(color=text_color, bgcolor=background),
+            cursor_line_style=None,
+            cursor_line_gutter_style=None,
+        )
+
+    def _apply_history_chat_text_area_theme(self, text_area: TextArea | None = None) -> None:
+        target = text_area or self._get_history_chat_text_area()
+        if target is None:
+            return
+        chat_theme = self._build_history_chat_theme()
+        target.register_theme(chat_theme)
+        target.theme = chat_theme.name
+
+    def _get_history_chat_text_area(self) -> TextArea | None:
+        try:
+            return self.query_one("#history_chat_input", TextArea)
+        except Exception:
+            return None
 
     async def fetch_history_details(self, vacancy_id: str) -> None:
         try:
