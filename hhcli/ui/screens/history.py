@@ -69,7 +69,10 @@ class NegotiationHistoryScreen(Screen):
         self._pending_details_id: Optional[str] = None
         self._debounce_timer: Optional[Timer] = None
         self._current_chat_negotiation_id: Optional[str] = None
+        self._current_chat_vacancy_id: Optional[str] = None
         self._chat_send_in_progress: bool = False
+        self._negotiation_sync_in_progress: bool = False
+        self._chat_sync_attempted: set[str] = set()
 
         self.html_converter = html2text.HTML2Text()
         self.html_converter.body_width = 0
@@ -339,7 +342,9 @@ class NegotiationHistoryScreen(Screen):
                 vac_id_str = str(focused_option.id)
                 self.load_vacancy_details(vac_id_str)
                 record = self.history_by_vacancy.get(vac_id_str, {})
-                self._load_chat_for_negotiation(record.get("negotiation_id"))
+                self._load_chat_for_negotiation(
+                    record.get("negotiation_id"), vacancy_id=vac_id_str
+                )
 
     def _build_header_text(self) -> Text:
         widths = self._history_column_widths
@@ -405,7 +410,10 @@ class NegotiationHistoryScreen(Screen):
         if not vacancy_id or vacancy_id == "__none__":
             return
         record = self.history_by_vacancy.get(str(vacancy_id), {})
-        self._load_chat_for_negotiation(record.get("negotiation_id"))
+        self._load_chat_for_negotiation(
+            record.get("negotiation_id"),
+            vacancy_id=str(vacancy_id),
+        )
         self._debounce_timer = self.set_timer(
             0.2, lambda vid=str(vacancy_id): self.load_vacancy_details(vid)
         )
@@ -593,15 +601,22 @@ class NegotiationHistoryScreen(Screen):
         except Exception:
             return value
 
-    def _load_chat_for_negotiation(self, negotiation_id: Optional[str]) -> None:
+    def _load_chat_for_negotiation(
+        self, negotiation_id: Optional[str], vacancy_id: Optional[str] = None
+    ) -> None:
         """Загружает переписку для выбранного отклика"""
         self._current_chat_negotiation_id = negotiation_id or None
+        self._current_chat_vacancy_id = vacancy_id or None
         try:
             md = self.query_one("#history_chat_markdown", Markdown)
         except Exception:
             return
         if not negotiation_id:
-            md.update("[dim]Переписка недоступна для этого отклика.[/dim]")
+            sync_message = "[dim]Переписка недоступна для этого отклика.[/dim]"
+            if vacancy_id:
+                sync_message = "[dim]Переписка недоступна — обновляем историю, попробуйте подождать...[/dim]"
+                self._maybe_sync_chat_for_vacancy(str(vacancy_id))
+            md.update(sync_message)
             return
         md.update("[dim]Загрузка переписки...[/dim]")
         self.run_worker(
@@ -711,6 +726,67 @@ class NegotiationHistoryScreen(Screen):
             key=lambda m: m.get("created_at") or "",
         )
         md.update("\n\n---\n\n".join(format_entry(e) for e in sorted_messages))
+
+    def _maybe_sync_chat_for_vacancy(self, vacancy_id: str) -> None:
+        """Пробует пересинхронизировать историю, если у записи нет negotiation_id."""
+        if self._negotiation_sync_in_progress:
+            return
+        if vacancy_id in self._chat_sync_attempted:
+            return
+        self._chat_sync_attempted.add(vacancy_id)
+        self._negotiation_sync_in_progress = True
+
+        async def worker():
+            try:
+                self.app.client.sync_negotiation_history()
+            except AuthorizationPending as auth_exc:
+                log_to_db(
+                    "WARN",
+                    LogSource.SYNC_ENGINE,
+                    f"Синхронизация переписки прервана: {auth_exc}",
+                )
+                self.app.call_from_thread(
+                    self.app.notify,
+                    "Авторизуйтесь, чтобы обновить переписку.",
+                    title="Переписка",
+                    severity="warning",
+                    timeout=4,
+                )
+            except Exception as exc:  # pragma: no cover - сетевые ошибки
+                log_to_db(
+                    "ERROR",
+                    LogSource.SYNC_ENGINE,
+                    f"Ошибка синхронизации переписки: {exc}",
+                )
+                self.app.call_from_thread(
+                    self.app.notify,
+                    "Не удалось обновить переписку.",
+                    title="Переписка",
+                    severity="error",
+                    timeout=4,
+                )
+            finally:
+                self.app.call_from_thread(self._after_chat_sync, vacancy_id)
+
+        self.run_worker(worker(), thread=True, exclusive=True)
+
+    def _after_chat_sync(self, vacancy_id: str) -> None:
+        self._negotiation_sync_in_progress = False
+        self._refresh_history()
+        option_list = self.query_one(HistoryOptionList)
+        target_index = None
+        for idx in range(option_list.option_count):
+            opt = option_list.get_option_at_index(idx)
+            if opt and str(opt.id) == str(vacancy_id):
+                target_index = idx
+                break
+        if target_index is not None:
+            option_list.highlighted = target_index
+            record = self.history_by_vacancy.get(str(vacancy_id), {})
+            self._load_chat_for_negotiation(
+                record.get("negotiation_id"),
+                vacancy_id=str(vacancy_id),
+            )
 
     def action_send_chat_message(self) -> None:
         if self._chat_send_in_progress:
