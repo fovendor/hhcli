@@ -40,7 +40,6 @@ from ..utils.constants import MAX_COLUMN_WIDTH
 from ..utils.formatting import (
     clamp,
     format_date,
-    format_datetime,
     format_segment,
     normalize_width_map,
     set_loader_visible,
@@ -87,53 +86,68 @@ class NegotiationHistoryScreen(Screen):
                     id="history_resume_label",
                 )
             with Horizontal(id="history_layout"):
-                with Vertical(id="history_panel", classes="pane") as history_panel:
-                    history_panel.border_title = "История откликов"
-                    history_panel.styles.border_title_align = "left"
-                    yield Static(id="history_list_header")
-                    yield HistoryOptionList(id="history_list")
-                with Vertical(id="history_details_panel", classes="pane") as details_panel:
-                    details_panel.border_title = "Детали и переписка"
-                    details_panel.styles.border_title_align = "left"
-                    with TabbedContent(initial="history_description_tab", id="history_details_tabs"):
-                        with TabPane("Описание вакансии", id="history_description_tab"):
-                            with VerticalScroll(id="history_details_pane"):
-                                yield Markdown(
-                                    "[dim]Выберите отклик слева, чтобы увидеть детали.[/dim]",
-                                    id="history_details",
-                                )
-                                yield LoadingIndicator(id="history_loader")
-                        with TabPane("Переписка", id="history_chat_tab"):
-                            with Vertical(id="history_chat_split"):
-                                with VerticalScroll(id="history_chat_upper"):
-                                    yield Markdown(
-                                        "[dim]Переписка загрузится после выбора отклика.[/dim]",
-                                        id="history_chat_markdown",
-                                    )
-                                with Vertical(id="history_chat_lower"):
-                                    with Horizontal(id="history_chat_toolbar"):
-                                        toolbar_items = [
-                                            ("history_chat_bold", Text.from_markup("[b]B[/b]")),
-                                            ("history_chat_italic", Text.from_markup("[i]I[/i]")),
-                                            ("history_chat_strike", Text.from_markup("[strike]S[/strike]")),
-                                            ("history_chat_ul", Text.from_markup("[b]⁝[/b]")),
-                                            ("history_chat_ol", Text.from_markup("1.")),
-                                        ]
-                                        for btn_id, label in toolbar_items:
-                                            yield Button(label, id=btn_id, classes="chat-toolbar-btn")
-                                    chat_input = TextArea(id="history_chat_input")
-                                    chat_input.placeholder = "Введите сообщение..."
-                                    chat_input.show_line_numbers = False
-                                    chat_input.action_undo = lambda: self._safe_chat_undo()
-                                    chat_input.action_redo = lambda: self._safe_chat_redo()
-                                    self._apply_history_chat_text_area_theme(chat_input)
-                                    yield chat_input
-                                    yield Button(
-                                        "Отправить работодателю",
-                                        id="history_chat_send",
-                                        variant="success",
-                                    )
+                yield from self._compose_history_panel()
+                yield from self._compose_details_panel()
             yield Footer()
+
+    def _compose_history_panel(self) -> ComposeResult:
+        with Vertical(id="history_panel", classes="pane") as history_panel:
+            history_panel.border_title = "История откликов"
+            history_panel.styles.border_title_align = "left"
+            yield Static(id="history_list_header")
+            yield HistoryOptionList(id="history_list")
+
+    def _compose_details_panel(self) -> ComposeResult:
+        with Vertical(id="history_details_panel", classes="pane") as details_panel:
+            details_panel.border_title = "Детали и переписка"
+            details_panel.styles.border_title_align = "left"
+            with TabbedContent(initial="history_description_tab", id="history_details_tabs"):
+                yield from self._compose_description_tab()
+                yield from self._compose_chat_tab()
+
+    def _compose_description_tab(self) -> ComposeResult:
+        with TabPane("Описание вакансии", id="history_description_tab"):
+            with VerticalScroll(id="history_details_pane"):
+                yield Markdown(
+                    "[dim]Выберите отклик слева, чтобы увидеть детали.[/dim]",
+                    id="history_details",
+                )
+                yield LoadingIndicator(id="history_loader")
+
+    def _compose_chat_tab(self) -> ComposeResult:
+        with TabPane("Переписка", id="history_chat_tab"):
+            with Vertical(id="history_chat_split"):
+                with VerticalScroll(id="history_chat_upper"):
+                    yield Markdown(
+                        "[dim]Переписка загрузится после выбора отклика.[/dim]",
+                        id="history_chat_markdown",
+                    )
+                with Vertical(id="history_chat_lower"):
+                    yield from self._compose_chat_toolbar()
+                    chat_input = TextArea(id="history_chat_input")
+                    chat_input.placeholder = "Введите сообщение..."
+                    chat_input.show_line_numbers = False
+                    chat_input.action_undo = lambda: self._safe_chat_undo()
+                    chat_input.action_redo = lambda: self._safe_chat_redo()
+                    self._apply_history_chat_text_area_theme(chat_input)
+                    yield chat_input
+                    yield Button(
+                        "Отправить работодателю",
+                        id="history_chat_send",
+                        variant="success",
+                    )
+
+    def _compose_chat_toolbar(self) -> ComposeResult:
+        toolbar_items = [
+            ("history_chat_bold", Text.from_markup("[b]B[/b]")),
+            ("history_chat_italic", Text.from_markup("[i]I[/i]")),
+            ("history_chat_strike", Text.from_markup("[strike]S[/strike]")),
+            ("history_chat_ul", Text.from_markup("[b]⁝[/b]")),
+            ("history_chat_ol", Text.from_markup("1.")),
+        ]
+        with Horizontal(id="history_chat_toolbar"):
+            for btn_id, label in toolbar_items:
+                yield Button(label, id=btn_id, classes="chat-toolbar-btn")
 
     def on_mount(self) -> None:
         self._reload_history_layout_preferences()
@@ -162,12 +176,16 @@ class NegotiationHistoryScreen(Screen):
                 event.prevent_default()
                 self._safe_chat_undo()
                 return
-            if ctrl and (key_name == "y" or (key_name == "z" and shift) or key_name == "shift+ctrl+z"):
+            if ctrl and (
+                key_name == "y"
+                or (key_name == "z" and shift)
+                or key_name == "shift+ctrl+z"
+            ):
                 event.stop()
                 event.prevent_default()
                 self._safe_chat_redo()
                 return
-        # Screen has no base on_key; swallow if not handled above
+        # У экрана нет базовой обработки клавиш, поэтому просто выходим, если ничего не сделали сами
         return None
 
     def _reload_history_layout_preferences(self) -> None:
@@ -363,14 +381,6 @@ class NegotiationHistoryScreen(Screen):
             Text("  "),
             format_segment(applied, widths["date"]),
         )
-
-    @staticmethod
-    def _format_datetime(value):
-        return format_datetime(value)
-
-    @staticmethod
-    def _format_date(value):
-        return format_date(value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "history_chat_send":
