@@ -9,6 +9,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.events import Key
 from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import (
@@ -110,9 +111,21 @@ class NegotiationHistoryScreen(Screen):
                                         id="history_chat_markdown",
                                     )
                                 with Vertical(id="history_chat_lower"):
+                                    with Horizontal(id="history_chat_toolbar"):
+                                        toolbar_items = [
+                                            ("history_chat_bold", Text.from_markup("[b]B[/b]")),
+                                            ("history_chat_italic", Text.from_markup("[i]I[/i]")),
+                                            ("history_chat_strike", Text.from_markup("[strike]S[/strike]")),
+                                            ("history_chat_ul", Text.from_markup("[b]⁝[/b]")),
+                                            ("history_chat_ol", Text.from_markup("1.")),
+                                        ]
+                                        for btn_id, label in toolbar_items:
+                                            yield Button(label, id=btn_id, classes="chat-toolbar-btn")
                                     chat_input = TextArea(id="history_chat_input")
                                     chat_input.placeholder = "Введите сообщение..."
                                     chat_input.show_line_numbers = False
+                                    chat_input.action_undo = lambda: self._safe_chat_undo()
+                                    chat_input.action_redo = lambda: self._safe_chat_redo()
                                     self._apply_history_chat_text_area_theme(chat_input)
                                     yield chat_input
                                     yield Button(
@@ -137,6 +150,25 @@ class NegotiationHistoryScreen(Screen):
         self._update_history_header()
         self._apply_history_chat_text_area_theme()
         self.query_one(HistoryOptionList).focus()
+
+    def on_key(self, event: Key) -> None:
+        chat_input = self._get_history_chat_text_area()
+        if chat_input and chat_input.has_focus:
+            ctrl = bool(getattr(event, "ctrl", False) or getattr(event, "ctrl_key", False))
+            shift = bool(getattr(event, "shift", False) or getattr(event, "shift_key", False))
+            key_name = event.key or ""
+            if ctrl and key_name == "z":
+                event.stop()
+                event.prevent_default()
+                self._safe_chat_undo()
+                return
+            if ctrl and (key_name == "y" or (key_name == "z" and shift) or key_name == "shift+ctrl+z"):
+                event.stop()
+                event.prevent_default()
+                self._safe_chat_redo()
+                return
+        # Screen has no base on_key; swallow if not handled above
+        return None
 
     def _reload_history_layout_preferences(self) -> None:
         config = load_profile_config(self.app.client.profile_name)
@@ -343,6 +375,16 @@ class NegotiationHistoryScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "history_chat_send":
             self.action_send_chat_message()
+        elif event.button.id == "history_chat_bold":
+            self._apply_chat_format("**", "**")
+        elif event.button.id == "history_chat_italic":
+            self._apply_chat_format("*", "*")
+        elif event.button.id == "history_chat_strike":
+            self._apply_chat_format("~~", "~~")
+        elif event.button.id == "history_chat_ul":
+            self._insert_chat_snippet("- ")
+        elif event.button.id == "history_chat_ol":
+            self._insert_chat_snippet("1. ")
 
     def on_option_list_option_highlighted(
         self, event: OptionList.OptionHighlighted
@@ -410,6 +452,70 @@ class NegotiationHistoryScreen(Screen):
             return self.query_one("#history_chat_send", Button)
         except Exception:
             return None
+
+    def _insert_chat_snippet(self, snippet: str) -> None:
+        chat_input = self._get_history_chat_text_area()
+        if chat_input is None:
+            return
+        insert_method = getattr(chat_input, "insert", None)
+        if callable(insert_method):
+            try:
+                insert_method(snippet)
+            except Exception:
+                chat_input.text = (chat_input.text or "") + snippet
+        else:
+            chat_input.text = (chat_input.text or "") + snippet
+        chat_input.focus()
+
+    def _apply_chat_format(self, prefix: str, suffix: str) -> None:
+        chat_input = self._get_history_chat_text_area()
+        if chat_input is None:
+            return
+        insert_method = getattr(chat_input, "insert", None)
+        move_method = getattr(chat_input, "move_cursor_relative", None)
+
+        snippet = f"{prefix}{suffix}"
+        if callable(insert_method):
+            try:
+                insert_method(snippet)
+                if callable(move_method) and suffix:
+                    move_method(columns=-len(suffix))
+            except Exception:
+                chat_input.text = (chat_input.text or "") + snippet
+                if callable(move_method) and suffix:
+                    try:
+                        move_method(columns=-len(suffix))
+                    except Exception:
+                        pass
+        else:
+            chat_input.text = (chat_input.text or "") + snippet
+        chat_input.focus()
+
+    def _safe_chat_undo(self) -> None:
+        chat_input = self._get_history_chat_text_area()
+        if chat_input is None:
+            return
+        try:
+            chat_input.undo()
+        except Exception as exc:
+            log_to_db(
+                "WARN",
+                LogSource.TUI,
+                f"Ошибка undo в чате: {exc}",
+            )
+
+    def _safe_chat_redo(self) -> None:
+        chat_input = self._get_history_chat_text_area()
+        if chat_input is None:
+            return
+        try:
+            chat_input.redo()
+        except Exception as exc:
+            log_to_db(
+                "WARN",
+                LogSource.TUI,
+                f"Ошибка redo в чате: {exc}",
+            )
 
     def _message_time_label(self, value: str | None) -> str:
         if not value:
@@ -523,12 +629,14 @@ class NegotiationHistoryScreen(Screen):
             who = "Вы" if author_type == "applicant" else "Работодатель"
             ts = self._message_time_label(entry.get("created_at"))
             if author_type == "applicant":
-                status = "Прочитано работодателем" if entry.get("viewed_by_opponent") else "Не прочитано"
+                viewed = bool(entry.get("viewed_by_opponent"))
+                status = "Прочитано работодателем" if viewed else "Не прочитано"
             else:
-                status = "Прочитано" if entry.get("viewed_by_me") else "Не прочитано"
+                viewed = bool(entry.get("viewed_by_me"))
+                status = "Прочитано" if viewed else "Не прочитано"
             body = entry.get("text") or ""
-            status_time = self._message_time_label(entry.get("created_at"))
-            status_line = f"> `Статус: {status} · {status_time}`"
+            status_suffix = f" · {ts}" if viewed else ""
+            status_line = f"> `Статус: {status}{status_suffix}`"
             return f"**{who}** ({ts})\n\n{body}\n\n{status_line}"
 
         sorted_messages = sorted(

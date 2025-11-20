@@ -240,22 +240,45 @@ Footer > .footer--highlight-key {
     padding: 0 0 1 0;
 }
 
+#history_chat_toolbar {
+    layout: horizontal;
+    height: auto;
+    min-height: 3;
+    background: transparent;
+    border: none;
+    content-align: left middle;
+    align: left middle;
+}
+
+#history_chat_toolbar Button {
+    height: 3;
+    min-width: 3;
+    max-width: 5;
+    width: auto;
+}
+
+#history_chat_toolbar Button.chat-toolbar-btn {
+    background: $surface-panel;
+    border: round $border-subtle;
+    text-style: bold;
+}
+
 #history_chat_tab #history_chat_lower {
     dock: bottom;
-    height: 10;
-    min-height: 9;
+    height: auto;
+    min-height: 12;
     padding: 0;
 }
 
 #history_chat_tab #history_chat_lower TextArea {
-    height: 7;
-    min-height: 7;
-    max-height: 12;
+    height: 8;
+    min-height: 8;
+    max-height: 13;
     width: 100%;
     margin: 0;
 }
 
-#history_chat_tab #history_chat_lower Button {
+#history_chat_send {
     width: 100%;
     margin: 0;
 }
