@@ -481,6 +481,8 @@ class NegotiationHistoryScreen(Screen):
         chat_input = self._get_history_chat_text_area()
         if chat_input is None:
             return
+        if self._wrap_chat_selection(chat_input, prefix, suffix):
+            return
         insert_method = getattr(chat_input, "insert", None)
         move_method = getattr(chat_input, "move_cursor_relative", None)
 
@@ -500,6 +502,61 @@ class NegotiationHistoryScreen(Screen):
         else:
             chat_input.text = (chat_input.text or "") + snippet
         chat_input.focus()
+
+    def _wrap_chat_selection(self, chat_input: TextArea, prefix: str, suffix: str) -> bool:
+        """Оборачивает выделенный текст в TextArea указанными префиксом/суффиксом."""
+        selection = getattr(chat_input, "selection", None)
+        text = chat_input.text or ""
+        if not selection or selection.start == selection.end:
+            return False
+        try:
+            start_offset = self._location_to_offset(text, selection.start)
+            end_offset = self._location_to_offset(text, selection.end)
+            if start_offset > end_offset:
+                start_offset, end_offset = end_offset, start_offset
+            wrapped = text[:start_offset] + prefix + text[start_offset:end_offset] + suffix + text[end_offset:]
+            chat_input.text = wrapped
+            cursor_offset = start_offset + len(prefix) + (end_offset - start_offset) + len(suffix)
+            target_location = self._offset_to_location(wrapped, cursor_offset)
+            move_cursor = getattr(chat_input, "move_cursor", None)
+            if callable(move_cursor):
+                move_cursor(target_location)
+            chat_input.focus()
+            return True
+        except Exception as exc:
+            log_to_db(
+                "WARN",
+                LogSource.TUI,
+                f"Не удалось обернуть выделение в чате: {exc}",
+            )
+            return False
+
+    @staticmethod
+    def _location_to_offset(text: str, location: tuple[int, int]) -> int:
+        """Переводит пару (строка, колонка) в позицию символа в строке."""
+        row, col = location
+        lines = text.splitlines(True)
+        if not lines:
+            return 0
+        if row >= len(lines):
+            return len(text)
+        offset = sum(len(lines[i]) for i in range(row))
+        return min(len(text), offset + min(col, len(lines[row])))
+
+    @staticmethod
+    def _offset_to_location(text: str, offset: int) -> tuple[int, int]:
+        """Переводит позицию в строке обратно в (строка, колонка)."""
+        offset = max(0, min(len(text), offset))
+        lines = text.splitlines(True)
+        if not lines:
+            return (0, 0)
+        current = 0
+        for idx, line in enumerate(lines):
+            next_offset = current + len(line)
+            if offset <= next_offset:
+                return (idx, offset - current)
+            current = next_offset
+        return (len(lines) - 1, len(lines[-1]))
 
     def _safe_chat_undo(self) -> None:
         chat_input = self._get_history_chat_text_area()
