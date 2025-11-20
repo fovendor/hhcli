@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from requests import exceptions as req_exc
 from textual.app import App
 from textual.binding import Binding
 from textual.scrollbar import ScrollBar
@@ -169,6 +170,33 @@ class HHCliApp(App):
                 title="Авторизация",
                 severity="warning",
                 timeout=4,
+            )
+        except (req_exc.RequestException, ConnectionError) as conn_exc:
+            log_to_db(
+                "WARN",
+                LogSource.SYNC_ENGINE,
+                f"Синхронизация истории остановлена из-за сетевой ошибки: {conn_exc}",
+            )
+            self.call_from_thread(
+                self.notify,
+                "Не удалось синхронизировать историю (проблема с подключением/SSL). "
+                "Попробуйте позже.",
+                title="Синхронизация",
+                severity="warning",
+                timeout=5,
+            )
+        except Exception as exc:  # pragma: no cover
+            log_to_db(
+                "ERROR",
+                LogSource.SYNC_ENGINE,
+                f"Неожиданная ошибка синхронизации: {exc}",
+            )
+            self.call_from_thread(
+                self.notify,
+                "Синхронизация истории прервана из-за неизвестной ошибки.",
+                title="Синхронизация",
+                severity="error",
+                timeout=5,
             )
 
     async def cache_dictionaries(self) -> None:

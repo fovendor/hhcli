@@ -49,7 +49,7 @@ def _select_value(widget: Select) -> str | None:
 
 def _set_select_value(widget: Select, value: str | None) -> None:
     """Восстанавливает значение Select и очищает поле, если данных нет"""
-    if value:
+    if value and value in getattr(widget, "_legal_values", set()):
         widget.value = value
     else:
         widget.clear()
@@ -572,13 +572,21 @@ class ConfigScreen(Screen):
     ) -> None:
         """Работает в основном потоке и наполняет форму данными"""
         defaults = get_default_config()
-        self.query_one("#work_format", Select).set_options(
-            [(item["name"], item["id"]) for item in work_formats]
-        )
+        work_format_options = [(item["name"], str(item["id"])) for item in work_formats]
+        configured_work_format = config.get(ConfigKeys.WORK_FORMAT)
+        default_work_format = defaults.get(ConfigKeys.WORK_FORMAT)
+        existing_values = {value for _, value in work_format_options}
+        for value in (configured_work_format, default_work_format):
+            if value and value not in existing_values:
+                work_format_options.append((str(value), str(value)))
+                existing_values.add(value)
+        if not work_format_options:
+            work_format_options.append(("Не выбрано", Select.BLANK))
+        self.query_one("#work_format", Select).set_options(work_format_options)
 
         self.query_one("#text_include", Input).value = ", ".join(config.get(ConfigKeys.TEXT_INCLUDE, []))
         self.query_one("#negative", Input).value = ", ".join(config.get(ConfigKeys.NEGATIVE, []))
-        _set_select_value(self.query_one("#work_format", Select), config.get(ConfigKeys.WORK_FORMAT))
+        _set_select_value(self.query_one("#work_format", Select), configured_work_format)
         _set_select_value(self.query_one("#search_field", Select), config.get(ConfigKeys.SEARCH_FIELD))
         self.query_one("#period", Input).value = config.get(ConfigKeys.PERIOD, "")
         self.query_one("#cover_letter", TextArea).load_text(config.get(ConfigKeys.COVER_LETTER, ""))

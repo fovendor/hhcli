@@ -24,6 +24,10 @@ class AuthorizationPending(RuntimeError):
 
 class HHApiClient:
     """Клиент для API hh.ru, который берёт на себя авторизацию и сетевые вызовы"""
+
+    RETRY_ATTEMPTS = 3
+    RETRY_BACKOFF_SECONDS = 1.0
+
     def __init__(self):
         self.access_token = None
         self.refresh_token = None
@@ -251,50 +255,63 @@ class HHApiClient:
         headers = kwargs.setdefault("headers", {})
         headers["Authorization"] = f"Bearer {self.access_token}"
         url = f"{API_BASE_URL}{endpoint}"
-        try:
-            response = requests.request(method, url, **kwargs)
-            response.raise_for_status()
-            if response.status_code in (201, 204):
-                return None
-            return response.json()
-        except requests.HTTPError as e:
-            if e.response.status_code == 401:
+        attempt = 0
+        while True:
+            try:
+                response = requests.request(method, url, **kwargs)
+                response.raise_for_status()
+                if response.status_code in (201, 204):
+                    return None
+                return response.json()
+            except requests.HTTPError as e:
+                if e.response.status_code == 401:
+                    log_to_db(
+                        "WARN", LogSource.API_CLIENT,
+                        f"Получен 401 Unauthorized для {endpoint}. "
+                        "Повторная попытка после обновления токена."
+                    )
+                    try:
+                        self.ensure_active_token()
+                        headers["Authorization"] = f"Bearer {self.access_token}"
+                        response = requests.request(method, url, **kwargs)
+                        response.raise_for_status()
+                        if response.status_code in (201, 204):
+                            return None
+                        return response.json()
+                    except AuthorizationPending:
+                        raise
+                    except Exception as refresh_e:
+                        msg = ("Повторная попытка обновления токена не удалась. "
+                               f"Ошибка: {refresh_e}")
+                        log_to_db("ERROR", LogSource.API_CLIENT, msg)
+                        raise ConnectionError(
+                            "Не удалось обновить токен. "
+                            "Попробуйте пере-авторизоваться."
+                        ) from refresh_e
                 log_to_db(
-                    "WARN", LogSource.API_CLIENT,
-                    f"Получен 401 Unauthorized для {endpoint}. "
-                    "Повторная попытка после обновления токена."
+                    "ERROR", LogSource.API_CLIENT,
+                    f"HTTP ошибка для {method} {endpoint}: "
+                    f"{e.response.status_code} {e.response.text}"
                 )
-                try:
-                    self.ensure_active_token()
-                    headers["Authorization"] = f"Bearer {self.access_token}"
-                    response = requests.request(method, url, **kwargs)
-                    response.raise_for_status()
-                    if response.status_code in (201, 204):
-                        return None
-                    return response.json()
-                except AuthorizationPending:
-                    raise
-                except Exception as refresh_e:
-                    msg = ("Повторная попытка обновления токена не удалась. "
-                           f"Ошибка: {refresh_e}")
-                    log_to_db("ERROR", LogSource.API_CLIENT, msg)
-                    raise ConnectionError(
-                        "Не удалось обновить токен. "
-                        "Попробуйте пере-авторизоваться."
-                    ) from refresh_e
-            log_to_db(
-                "ERROR", LogSource.API_CLIENT,
-                f"HTTP ошибка для {method} {endpoint}: "
-                f"{e.response.status_code} {e.response.text}"
-            )
-            raise e
-        except requests.RequestException as e:
-            msg = (
-                "Ошибка соединения с hh.ru. "
-                "Проверьте подключение к интернету или повторите попытку позже."
-            )
-            log_to_db("ERROR", LogSource.API_CLIENT, f"{msg} Детали: {e}")
-            raise ConnectionError(msg) from e
+                raise e
+            except requests.RequestException as e:
+                attempt += 1
+                if attempt > self.RETRY_ATTEMPTS:
+                    msg = (
+                        "Ошибка соединения с hh.ru. "
+                        "Проверьте подключение к интернету или повторите попытку позже."
+                    )
+                    log_to_db("ERROR", LogSource.API_CLIENT, f"{msg} Детали: {e}")
+                    raise ConnectionError(msg) from e
+                delay = self.RETRY_BACKOFF_SECONDS * attempt
+                log_to_db(
+                    "WARN",
+                    LogSource.API_CLIENT,
+                    f"Сетевая ошибка для {method} {endpoint} (попытка "
+                    f"{attempt}/{self.RETRY_ATTEMPTS}). Повтор через {delay:.1f}с. "
+                    f"Детали: {e}"
+                )
+                sleep(delay)
 
     def get_my_resumes(self):
         return self._request("GET", "/resumes/mine")
