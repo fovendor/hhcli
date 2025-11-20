@@ -76,7 +76,7 @@ MarkdownH1 {
 }
 
 MarkdownH2 {
-    margin: 0 0 0 10;
+    margin: 0 0 2 10;
     width: 80%;
     align: center middle;
     background: $surface-elevated 50%;
@@ -355,6 +355,11 @@ TextArea:focus {
     border: round $focus-ring;
 }
 
+Input:hover,
+TextArea:hover {
+    border: round $focus-ring;
+}
+
 TextArea {
     min-height: 12;
     scrollbar-color: $accent-secondary;
@@ -371,6 +376,10 @@ Switch {
 }
 
 Switch:focus {
+    border: round $focus-ring;
+}
+
+Switch:hover {
     border: round $focus-ring;
 }
 
@@ -423,6 +432,11 @@ Select:focus > SelectCurrent {
     border: round $focus-ring;
 }
 
+Select:hover > SelectCurrent,
+SelectCurrent:hover {
+    border: round $focus-ring;
+}
+
 Select > SelectOverlay {
     width: 1fr;
 }
@@ -435,6 +449,10 @@ SelectOverlay {
 }
 
 SelectOverlay:focus {
+    border: round $focus-ring;
+}
+
+SelectOverlay:hover {
     border: round $focus-ring;
 }
 
