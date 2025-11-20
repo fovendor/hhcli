@@ -48,6 +48,54 @@ Screen {
     color: $text-base;
 }
 
+Static, Label {
+    color: $text-strong;
+}
+
+Markdown {
+    background: $surface-panel;
+    color: $text-strong;
+    padding: 0 1;
+    border: round $border-subtle;
+    border-title-align: left;
+}
+
+# Markdown заголовки
+MarkdownHeader {
+    color: $text-strong;
+    background: transparent;
+    text-style: bold;
+    margin: 1 0;
+}
+
+MarkdownH1 {
+    width: 80%;
+    margin: 2 0;
+    align: center middle;
+    text-style: bold;
+}
+
+MarkdownH2 {
+    margin: 0 0 2 10;
+    width: 80%;
+    align: center middle;
+    background: $surface-elevated 50%;
+    border: round $text-strong;
+    padding: 1;
+    content-align: center middle;
+    text-style: bold;
+}
+
+MarkdownH3 {
+    text-style: bold;
+}
+
+
+LoadingIndicator,
+.loading-indicator {
+    color: $accent-secondary;
+}
+
 /* --- 2. Основная структура приложения --- */
 
 #vacancy_screen,

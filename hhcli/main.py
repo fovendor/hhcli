@@ -60,20 +60,18 @@ def run():
         return
 
     active_profile = get_active_profile_name()
-    if not active_profile:
-        log_to_db("WARN", "Main", "Активный профиль не найден. Вывод подсказки и завершение.")
-        print("Активный профиль не выбран. Пожалуйста, сначала войдите в аккаунт:")
-        print("  hhcli --auth <имя_профиля>")
-        return
 
     client = HHApiClient()
-    try:
-        log_to_db("INFO", "Main", f"Профиль '{active_profile}' активен. Загрузка данных профиля.")
-        client.load_profile_data(active_profile)
-    except ValueError as e:
-        log_to_db("ERROR", "Main", f"Ошибка загрузки профиля '{active_profile}': {e}")
-        print(f"Ошибка: {e}")
-        return
+    if active_profile:
+        try:
+            log_to_db("INFO", "Main", f"Профиль '{active_profile}' активен. Загрузка данных профиля.")
+            client.load_profile_data(active_profile)
+        except ValueError as e:
+            log_to_db("ERROR", "Main", f"Ошибка загрузки профиля '{active_profile}': {e}")
+            print(f"Ошибка: {e}")
+            return
+    else:
+        log_to_db("INFO", "Main", "Активный профиль не найден. Перехожу в TUI для выбора/создания.")
 
     app = HHCliApp(client=client)
     app.apply_theme_from_profile(active_profile)
