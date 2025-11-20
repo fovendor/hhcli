@@ -491,7 +491,6 @@ def get_professional_roles_by_ids(role_ids: Sequence[str]) -> list[dict[str, Any
 def init_db():
     global engine
     os.makedirs(DATA_DIR, exist_ok=True)
-    print(f"INFO: База данных используется по пути: {DB_PATH}")
     engine = create_engine(f"sqlite:///{DB_PATH}")
     metadata.create_all(engine)
     ensure_schema_upgrades()
@@ -1036,6 +1035,18 @@ def get_all_profiles() -> list[dict]:
         stmt = select(profiles)
         result = connection.execute(stmt).fetchall()
         return [dict(row._mapping) for row in result]
+
+
+def get_db_info() -> dict:
+    """Возвращает сведения о базе и профилях для вывода пользователю."""
+    profiles = get_all_profiles() if engine else []
+    active = get_active_profile_name()
+    return {
+        "db_path": DB_PATH,
+        "profile_count": len(profiles),
+        "active_profile": active,
+        "profiles": [p.get("profile_name") for p in profiles],
+    }
 
 def set_active_profile(profile_name: str):
     with engine.connect() as connection:

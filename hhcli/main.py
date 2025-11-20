@@ -1,7 +1,13 @@
 import sys
 
 from hhcli.client import HHApiClient
-from hhcli.database import init_db, set_active_profile, get_active_profile_name, log_to_db
+from hhcli.database import (
+    init_db,
+    set_active_profile,
+    get_active_profile_name,
+    log_to_db,
+    get_db_info,
+)
 from hhcli.ui.tui import HHCliApp
 from hhcli.version import get_version
 
@@ -11,6 +17,18 @@ def run():
 
     if any(flag in args for flag in ("-v", "--version")):
         print(get_version())
+        return
+
+    if any(flag in args for flag in ("--info", "-i")):
+        init_db()
+        info = get_db_info()
+        print("hhcli информация:")
+        print(f"  Версия: {get_version()}")
+        print(f"  База данных: {info['db_path']}")
+        print(f"  Активный профиль: {info['active_profile'] or 'не выбран'}")
+        print(f"  Число профилей: {info['profile_count']}")
+        if info["profiles"]:
+            print(f"  Профили: {', '.join(info['profiles'])}")
         return
 
     init_db()
