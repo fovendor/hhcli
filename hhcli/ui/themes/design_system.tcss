@@ -48,55 +48,6 @@ Screen {
     color: $text-base;
 }
 
-Static, Label {
-    color: $text-strong;
-}
-
-Markdown {
-    background: $surface-panel;
-    color: $text-strong;
-    padding: 0 1;
-    border: round $border-subtle;
-    border-title-align: left;
-}
-
-# Markdown заголовки
-MarkdownHeader {
-    color: $text-strong;
-    background: transparent;
-    text-style: bold;
-    margin: 1 0;
-}
-
-MarkdownH1 {
-    width: 80%;
-    margin: 2 0;
-    align: center middle;
-    text-style: bold;
-}
-
-MarkdownH2 {
-    margin: 0 0 2 10;
-    width: 80%;
-    align: center middle;
-    background: $surface-elevated 50%;
-    border: round $text-strong;
-    padding: 1;
-    content-align: center middle;
-    text-style: bold;
-}
-
-MarkdownH3 {
-    text-style: bold;
-}
-
-
-LoadingIndicator,
-.loading-indicator {
-    color: $accent-secondary;
-}
-
-
 /* --- 2. Основная структура приложения --- */
 
 #vacancy_screen,
@@ -841,4 +792,124 @@ Notification.-warning {
 
 Notification.-error {
     border: round $status-error;
+}
+
+/* --- Экран профилей --- */
+
+#profile_screen {
+    align: center middle;
+    width: 100%;
+    height: 100%;
+    padding: 2 0;
+    content-align: center bottom;
+}
+
+#profile_wrapper {
+    width: 30%;
+    height: 30%;
+    min-width: 40;
+    min-height: 12;
+    content-align: center middle;
+    align: center bottom;
+}
+
+#profile_panel {
+    width: 100%;
+    height: 100%;
+    min-width: 40;
+    min-height: 12;
+    border: round $border-subtle;
+    background: transparent;
+    padding: 1 0;
+    content-align: center middle;
+    align: center middle;
+}
+
+#profile_content {
+    height: 100%;
+    content-align: center middle;
+    align: center middle;
+}
+
+#profile_list {
+    width: 100%;
+    margin: 0 0 1 0;
+    background: transparent;
+    border: none;
+    content-align: center middle;
+    text-align: center;
+    align: center middle;
+}
+
+#profile_list .option-list--option,
+#profile_list .option-list--option-hover,
+#profile_list .option-list--option-highlighted,
+#profile_list .option-list--option-hover-highlighted {
+    background: transparent;
+    border: none;
+    padding: 0 1;
+    content-align: center middle;
+    text-align: center;
+}
+
+#profile_actions {
+    width: 100%;
+    padding-top: 1;
+    content-align: center middle;
+    align: center middle;
+}
+
+#profile_actions Button {
+    width: 100%;
+    min-width: 20;
+}
+
+#profile_create_block {
+    width: 100%;
+    content-align: center middle;
+}
+
+#profile_create_block Input {
+    width: 100%;
+}
+
+/* Модалка создания профиля */
+
+ProfileCreateDialog {
+    layer: modal;
+    align: center middle;
+    background: $overlay-scrim;
+}
+
+#profile-create-center {
+    width: 30%;
+    height: 20%;
+    min-width: 40;
+    min-height: 12;
+}
+
+#profile-create-dialog {
+    width: 100%;
+    height: 100%;
+    border: round $border-subtle;
+    background: $surface-panel;
+    padding: 1;
+    content-align: center middle;
+    align: center middle;
+}
+
+#profile-create-label {
+    text-style: bold;
+    color: $text-strong;
+}
+
+#profile-create-buttons {
+    width: 100%;
+    content-align: center middle;
+    align: center middle;
+    padding-top: 1;
+}
+
+#profile-create-buttons Button {
+    min-width: 25;
 }

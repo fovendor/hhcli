@@ -5,6 +5,7 @@ from typing import Optional
 from requests import exceptions as req_exc
 from textual.app import App
 from textual.binding import Binding
+from textual.events import Key
 from textual.scrollbar import ScrollBar
 from textual.widgets import Input, TextArea
 
@@ -46,6 +47,8 @@ class HHCliApp(App):
         self.dictionaries = {}
         self.css_manager = CSS_MANAGER
         self.title = "hh-cli"
+        self._ctrl_c_armed: bool = False
+        self._ctrl_c_reset_timer = None
 
     def apply_theme_from_profile(self, profile_name: Optional[str] = None) -> None:
         """Применяет тему, указанную в конфигурации профиля"""
@@ -72,33 +75,15 @@ class HHCliApp(App):
         log_to_db("INFO", LogSource.TUI, "Приложение смонтировано")
         all_profiles = get_all_profiles()
         active_profile = get_active_profile_name()
-        theme_profile = active_profile
-        if not theme_profile and all_profiles:
-            theme_profile = all_profiles[0]["profile_name"]
+        theme_profile = active_profile or (all_profiles[0]["profile_name"] if all_profiles else None)
         self.apply_theme_from_profile(theme_profile)
 
-        if not all_profiles:
-            self.exit(
-                "В базе не найдено ни одного профиля. "
-                "Войдите через --auth <имя_профиля>."
-            )
-            return
-
-        if len(all_profiles) == 1:
-            profile_name = all_profiles[0]["profile_name"]
-            log_to_db(
-                "INFO", LogSource.TUI,
-                f"Найден один профиль '{profile_name}', используется автоматически."
-            )
-            set_active_profile(profile_name)
-            await self.proceed_with_profile(profile_name)
-        else:
-            log_to_db("INFO", LogSource.TUI, "Найдено несколько профилей — показ выбора.")
-            self.push_screen(ProfileSelectionScreen(all_profiles), self.on_profile_selected)
+        log_to_db("INFO", LogSource.TUI, "Открываю экран выбора профиля.")
+        self.push_screen(ProfileSelectionScreen(all_profiles), self.on_profile_selected)
 
     async def on_profile_selected(self, selected_profile: Optional[str]) -> None:
         if not selected_profile:
-            log_to_db("INFO", LogSource.TUI, "Выбор профиля отменён, выходим.")
+            log_to_db("INFO", LogSource.TUI, "Выбор профиля отменён.")
             self.exit()
             return
         log_to_db("INFO", LogSource.TUI, f"Выбран профиль '{selected_profile}' из списка.")
@@ -210,6 +195,32 @@ class HHCliApp(App):
         log_to_db("INFO", LogSource.TUI, "Пользователь запросил выход.")
         self.css_manager.cleanup()
         self.exit()
+
+    def on_key(self, event: Key) -> None:
+        is_ctrl = getattr(event, "ctrl", False) or getattr(event, "ctrl_key", False)
+        if is_ctrl and event.key == "c":
+            event.stop()
+            event.prevent_default()
+            if self._ctrl_c_armed:
+                self.css_manager.cleanup()
+                self.exit()
+                return
+            self._ctrl_c_armed = True
+            if self._ctrl_c_reset_timer:
+                self._ctrl_c_reset_timer.stop()
+            self._ctrl_c_reset_timer = self.set_timer(2.5, self._reset_ctrl_c)
+            self.notify(
+                "Нажмите Ctrl+C ещё раз, чтобы выйти.",
+                title="Выход",
+                severity="warning",
+                timeout=2.5,
+            )
+            return
+        # App базово не реализует on_key; если не обработали сами — пропускаем
+        return None
+
+    def _reset_ctrl_c(self) -> None:
+        self._ctrl_c_armed = False
 
 
 __all__ = ["HHCliApp", "CSS_MANAGER"]
