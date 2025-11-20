@@ -260,6 +260,21 @@ Footer > .footer--highlight-key {
     margin: 0;
 }
 
+#history_chat_markdown BlockQuote {
+    color: $text-muted;
+    border: none;
+    padding: 0 0 0 1;
+    margin: 0 0 0 0;
+}
+
+#history_chat_markdown BlockQuote Code {
+    background: $surface-elevated;
+    color: $text-muted;
+    border: round $border-subtle;
+    text-style: dim italic;
+    padding: 0 1;
+}
+
 #history_chat_placeholder_top,
 #history_chat_placeholder_bottom {
     color: $text-muted;

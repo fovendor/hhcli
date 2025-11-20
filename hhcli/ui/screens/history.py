@@ -76,8 +76,6 @@ class NegotiationHistoryScreen(Screen):
         self.html_converter.ignore_links = False
         self.html_converter.ignore_images = True
         self.html_converter.mark_code = True
-        self._quit_binding_q = None
-        self._quit_binding_cyrillic = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="history_screen"):
@@ -125,9 +123,6 @@ class NegotiationHistoryScreen(Screen):
             yield Footer()
 
     def on_mount(self) -> None:
-        bindings_map = self.app._bindings
-        self._quit_binding_q = bindings_map.key_to_bindings.pop("q", None)
-        self._quit_binding_cyrillic = bindings_map.key_to_bindings.pop("й", None)
         self._reload_history_layout_preferences()
         self._apply_history_workspace_widths()
         self._update_history_header()
@@ -142,13 +137,6 @@ class NegotiationHistoryScreen(Screen):
         self._update_history_header()
         self._apply_history_chat_text_area_theme()
         self.query_one(HistoryOptionList).focus()
-
-    def on_unmount(self) -> None:
-        bindings_map = self.app._bindings
-        if self._quit_binding_q:
-            bindings_map.key_to_bindings["q"] = self._quit_binding_q
-        if self._quit_binding_cyrillic:
-            bindings_map.key_to_bindings["й"] = self._quit_binding_cyrillic
 
     def _reload_history_layout_preferences(self) -> None:
         config = load_profile_config(self.app.client.profile_name)
@@ -539,7 +527,9 @@ class NegotiationHistoryScreen(Screen):
             else:
                 status = "Прочитано" if entry.get("viewed_by_me") else "Не прочитано"
             body = entry.get("text") or ""
-            return f"**{who}** ({ts})\n\n{body}\n\n[dim]{status}[/dim]"
+            status_time = self._message_time_label(entry.get("created_at"))
+            status_line = f"> `Статус: {status} · {status_time}`"
+            return f"**{who}** ({ts})\n\n{body}\n\n{status_line}"
 
         sorted_messages = sorted(
             messages,
