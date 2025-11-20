@@ -16,6 +16,7 @@ from textual.widgets import (
     Header,
     LoadingIndicator,
     Markdown,
+    Button,
     Static,
     TabPane,
     TabbedContent,
@@ -68,6 +69,7 @@ class NegotiationHistoryScreen(Screen):
         self._pending_details_id: Optional[str] = None
         self._debounce_timer: Optional[Timer] = None
         self._current_chat_negotiation_id: Optional[str] = None
+        self._chat_send_in_progress: bool = False
 
         self.html_converter = html2text.HTML2Text()
         self.html_converter.body_width = 0
@@ -115,6 +117,11 @@ class NegotiationHistoryScreen(Screen):
                                     chat_input.show_line_numbers = False
                                     self._apply_history_chat_text_area_theme(chat_input)
                                     yield chat_input
+                                    yield Button(
+                                        "Отправить работодателю",
+                                        id="history_chat_send",
+                                        variant="success",
+                                    )
             yield Footer()
 
     def on_mount(self) -> None:
@@ -345,6 +352,10 @@ class NegotiationHistoryScreen(Screen):
     def _format_date(value):
         return format_date(value)
 
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "history_chat_send":
+            self.action_send_chat_message()
+
     def on_option_list_option_highlighted(
         self, event: OptionList.OptionHighlighted
     ) -> None:
@@ -403,6 +414,12 @@ class NegotiationHistoryScreen(Screen):
     def _get_history_chat_text_area(self) -> TextArea | None:
         try:
             return self.query_one("#history_chat_input", TextArea)
+        except Exception:
+            return None
+
+    def _get_history_chat_send_button(self) -> Button | None:
+        try:
+            return self.query_one("#history_chat_send", Button)
         except Exception:
             return None
 
@@ -529,6 +546,106 @@ class NegotiationHistoryScreen(Screen):
             key=lambda m: m.get("created_at") or "",
         )
         md.update("\n\n---\n\n".join(format_entry(e) for e in sorted_messages))
+
+    def action_send_chat_message(self) -> None:
+        if self._chat_send_in_progress:
+            return
+        negotiation_id = self._current_chat_negotiation_id
+        if not negotiation_id:
+            self.app.notify(
+                "Выберите отклик слева, чтобы отправить сообщение.",
+                title="Переписка",
+                severity="warning",
+            )
+            return
+        chat_input = self._get_history_chat_text_area()
+        if chat_input is None:
+            return
+        message = (chat_input.text or "").strip()
+        if not message:
+            self.app.notify(
+                "Введите сообщение перед отправкой.",
+                title="Переписка",
+                severity="warning",
+            )
+            return
+        self._chat_send_in_progress = True
+        send_button = self._get_history_chat_send_button()
+        if send_button:
+            send_button.disabled = True
+        self.run_worker(
+            self._send_chat_message_worker(str(negotiation_id), message),
+            thread=True,
+        )
+
+    async def _send_chat_message_worker(self, negotiation_id: str, message: str) -> None:
+        success = False
+        error_message = None
+        severity = "error"
+        try:
+            success = self.app.client.send_negotiation_message(negotiation_id, message)
+            if not success:
+                error_message = "Не удалось отправить сообщение работодателю."
+        except AuthorizationPending as auth_exc:
+            severity = "warning"
+            error_message = f"Авторизуйтесь, чтобы отправить сообщение: {auth_exc}"
+            log_to_db(
+                "WARN",
+                LogSource.SYNC_ENGINE,
+                f"Отправка сообщения недоступна до авторизации: {auth_exc}",
+            )
+        except Exception as exc:  # pragma: no cover - сетевые ошибки
+            error_message = f"Ошибка отправки сообщения: {exc}"
+            log_to_db(
+                "ERROR",
+                LogSource.SYNC_ENGINE,
+                f"Не удалось отправить сообщение в переписку {negotiation_id}: {exc}",
+            )
+
+        self.app.call_from_thread(
+            self._finalize_chat_message_send,
+            negotiation_id,
+            success,
+            error_message,
+            severity,
+        )
+
+    def _finalize_chat_message_send(
+        self,
+        negotiation_id: str,
+        success: bool,
+        error_message: str | None = None,
+        severity: str = "error",
+    ) -> None:
+        self._chat_send_in_progress = False
+        send_button = self._get_history_chat_send_button()
+        if send_button:
+            send_button.disabled = False
+
+        if not success:
+            if error_message:
+                self.app.notify(
+                    error_message,
+                    title="Переписка",
+                    severity=severity,
+                    timeout=4,
+                )
+            return
+
+        if negotiation_id != self._current_chat_negotiation_id:
+            return
+
+        chat_input = self._get_history_chat_text_area()
+        if chat_input:
+            chat_input.text = ""
+            chat_input.focus()
+        self.app.notify(
+            "Сообщение отправлено работодателю.",
+            title="Переписка",
+            severity="information",
+            timeout=3,
+        )
+        self._load_chat_for_negotiation(negotiation_id)
 
     async def fetch_history_details(self, vacancy_id: str) -> None:
         try:

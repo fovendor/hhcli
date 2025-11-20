@@ -220,6 +220,7 @@ Footer > .footer--highlight-key {
 #history_details_panel TabPane > VerticalScroll {
     background: transparent;
     padding: 0;
+    scrollbar-visibility: hidden;
 }
 
 #history_chat_tab #history_chat_split {
@@ -230,6 +231,7 @@ Footer > .footer--highlight-key {
 #history_chat_tab #history_chat_upper {
     height: 1fr;
     padding: 0 1;
+    scrollbar-visibility: hidden;
 }
 
 #history_chat_markdown {
@@ -240,16 +242,22 @@ Footer > .footer--highlight-key {
 
 #history_chat_tab #history_chat_lower {
     dock: bottom;
-    height: 8;
-    min-height: 6;
+    height: 10;
+    min-height: 9;
     padding: 0;
 }
 
 #history_chat_tab #history_chat_lower TextArea {
-    height: 6;
-    min-height: 6;
-    max-height: 10;
+    height: 7;
+    min-height: 7;
+    max-height: 12;
     width: 100%;
+    margin: 0;
+}
+
+#history_chat_tab #history_chat_lower Button {
+    width: 100%;
+    margin: 0;
 }
 
 #history_chat_placeholder_top,
