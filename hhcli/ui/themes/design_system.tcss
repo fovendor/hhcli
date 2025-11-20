@@ -214,6 +214,7 @@ Footer > .footer--highlight-key {
 #history_details_panel TabPane {
     background: transparent;
     padding: 0 1;
+    height: 1fr;
 }
 
 #history_details_panel TabPane > VerticalScroll {
@@ -228,19 +229,26 @@ Footer > .footer--highlight-key {
 
 #history_chat_tab #history_chat_upper {
     height: 1fr;
-    border: round $border-subtle;
-    padding: 1;
+    padding: 0 1;
+}
+
+#history_chat_markdown {
+    background: transparent;
+    border: none;
+    padding: 0 0 1 0;
 }
 
 #history_chat_tab #history_chat_lower {
-    height: 20%;
+    dock: bottom;
+    height: 8;
+    min-height: 6;
     padding: 0;
 }
 
 #history_chat_tab #history_chat_lower TextArea {
-    height: 100%;
-    min-height: 100%;
-    max-height: 100%;
+    height: 6;
+    min-height: 6;
+    max-height: 10;
     width: 100%;
 }
 
@@ -252,6 +260,12 @@ Footer > .footer--highlight-key {
 #history_chat_placeholder {
     color: $text-muted;
     padding: 1;
+}
+
+#history_chat_markdown {
+    background: transparent;
+    border: none;
+    padding: 0 0 1 0;
 }
 
 #vacancy_list_header {

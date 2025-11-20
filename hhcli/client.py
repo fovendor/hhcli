@@ -485,7 +485,7 @@ class HHApiClient:
         negotiation_id: str,
         *,
         page: int = 0,
-        per_page: int = 100,
+        per_page: int = 50,
         with_text_only: bool = False,
     ):
         """Получает страницу сообщений для указанного отклика"""
@@ -499,6 +499,42 @@ class HHApiClient:
             f"/negotiations/{negotiation_id}/messages",
             params=params,
         )
+
+    def get_latest_negotiation_messages(
+        self,
+        negotiation_id: str,
+        *,
+        per_page: int = 50,
+        with_text_only: bool = False,
+    ):
+        """
+        Получает последнюю страницу переписки вместе с количеством страниц.
+
+        Делает первый запрос для получения total pages, затем, при необходимости,
+        подтягивает последнюю страницу.
+        """
+        first_page = self.get_negotiation_messages(
+            negotiation_id,
+            page=0,
+            per_page=per_page,
+            with_text_only=with_text_only,
+        )
+        total_pages = max(1, int(first_page.get("pages", 1) or 1))
+        target_page = max(0, total_pages - 1)
+
+        if first_page.get("page") == target_page or target_page == 0:
+            data = first_page
+        else:
+            data = self.get_negotiation_messages(
+                negotiation_id,
+                page=target_page,
+                per_page=per_page,
+                with_text_only=with_text_only,
+            )
+        data.setdefault("pages", total_pages)
+        data.setdefault("page", target_page)
+        data.setdefault("per_page", per_page)
+        return data
 
     def send_negotiation_message(self, negotiation_id: str, message: str) -> bool:
         """Отправляет сообщение работодателю в рамках отклика"""

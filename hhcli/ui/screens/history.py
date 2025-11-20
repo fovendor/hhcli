@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html2text
+from datetime import datetime
 from typing import Optional
 
 from rich.style import Style
@@ -66,6 +67,7 @@ class NegotiationHistoryScreen(Screen):
         self.history_by_vacancy: dict[str, dict] = {}
         self._pending_details_id: Optional[str] = None
         self._debounce_timer: Optional[Timer] = None
+        self._current_chat_negotiation_id: Optional[str] = None
 
         self.html_converter = html2text.HTML2Text()
         self.html_converter.body_width = 0
@@ -103,11 +105,11 @@ class NegotiationHistoryScreen(Screen):
                         with TabPane("Переписка", id="history_chat_tab"):
                             with Vertical(id="history_chat_split"):
                                 with VerticalScroll(id="history_chat_upper"):
-                                    yield Static(
-                                        "[dim]Здесь будет информация о переписке.[/dim]",
-                                        id="history_chat_placeholder_top",
+                                    yield Markdown(
+                                        "[dim]Переписка загрузится после выбора отклика.[/dim]",
+                                        id="history_chat_markdown",
                                     )
-                                with VerticalScroll(id="history_chat_lower"):
+                                with Vertical(id="history_chat_lower"):
                                     chat_input = TextArea(id="history_chat_input")
                                     chat_input.placeholder = "Введите сообщение..."
                                     chat_input.show_line_numbers = False
@@ -124,6 +126,7 @@ class NegotiationHistoryScreen(Screen):
         self._update_history_header()
         self._refresh_history()
         self._apply_history_chat_text_area_theme()
+        self._load_chat_for_negotiation(None)
 
     def on_screen_resume(self) -> None:
         self.app.apply_theme_from_profile(self.app.client.profile_name)
@@ -288,7 +291,10 @@ class NegotiationHistoryScreen(Screen):
         if option_list.option_count and option_list.highlighted is not None:
             focused_option = option_list.get_option_at_index(option_list.highlighted)
             if focused_option and focused_option.id not in (None, "__none__"):
-                self.load_vacancy_details(str(focused_option.id))
+                vac_id_str = str(focused_option.id)
+                self.load_vacancy_details(vac_id_str)
+                record = self.history_by_vacancy.get(vac_id_str, {})
+                self._load_chat_for_negotiation(record.get("negotiation_id"))
 
     def _build_header_text(self) -> Text:
         widths = self._history_column_widths
@@ -347,6 +353,8 @@ class NegotiationHistoryScreen(Screen):
         vacancy_id = event.option.id
         if not vacancy_id or vacancy_id == "__none__":
             return
+        record = self.history_by_vacancy.get(str(vacancy_id), {})
+        self._load_chat_for_negotiation(record.get("negotiation_id"))
         self._debounce_timer = self.set_timer(
             0.2, lambda vid=str(vacancy_id): self.load_vacancy_details(vid)
         )
@@ -397,6 +405,130 @@ class NegotiationHistoryScreen(Screen):
             return self.query_one("#history_chat_input", TextArea)
         except Exception:
             return None
+
+    def _message_time_label(self, value: str | None) -> str:
+        if not value:
+            return "-"
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return value
+
+    def _load_chat_for_negotiation(self, negotiation_id: Optional[str]) -> None:
+        """Загружает переписку для выбранного отклика"""
+        self._current_chat_negotiation_id = negotiation_id or None
+        try:
+            md = self.query_one("#history_chat_markdown", Markdown)
+        except Exception:
+            return
+        if not negotiation_id:
+            md.update("[dim]Переписка недоступна для этого отклика.[/dim]")
+            return
+        md.update("[dim]Загрузка переписки...[/dim]")
+        self.run_worker(
+            self._fetch_chat_worker(str(negotiation_id)),
+            thread=True,
+            exclusive=True,
+        )
+
+    async def _fetch_chat_worker(self, negotiation_id: str) -> None:
+        messages: list[dict] = []
+        page = 0
+        per_page = 50
+        try:
+            while True:
+                data = self.app.client.get_negotiation_messages(
+                    negotiation_id,
+                    page=page,
+                    per_page=per_page,
+                    with_text_only=True,
+                )
+                items = data.get("items") or []
+                messages.extend(items)
+                pages_total = int(data.get("pages", 1) or 1)
+                if page >= pages_total - 1:
+                    break
+                page += 1
+            self.app.call_from_thread(
+                self._render_chat_messages,
+                negotiation_id,
+                messages,
+            )
+        except AuthorizationPending as auth_exc:
+            log_to_db(
+                "WARN",
+                LogSource.SYNC_ENGINE,
+                f"Переписка недоступна до авторизации: {auth_exc}",
+            )
+            self.app.call_from_thread(
+                self.app.notify,
+                "Авторизуйтесь, чтобы загрузить переписку.",
+                title="Авторизация",
+                severity="warning",
+                timeout=4,
+            )
+            self.app.call_from_thread(
+                self._render_chat_messages,
+                negotiation_id,
+                [],
+                "[dim]Требуется авторизация для просмотра переписки.[/dim]",
+            )
+        except Exception as exc:  # pragma: no cover - сетевые ошибки
+            log_to_db(
+                "ERROR",
+                LogSource.SYNC_ENGINE,
+                f"Не удалось загрузить переписку: {exc}",
+            )
+            self.app.call_from_thread(
+                self.app.notify,
+                "Ошибка загрузки переписки.",
+                title="Переписка",
+                severity="error",
+                timeout=4,
+            )
+            self.app.call_from_thread(
+                self._render_chat_messages,
+                negotiation_id,
+                [],
+                "[dim]Не удалось загрузить переписку.[/dim]",
+            )
+
+    def _render_chat_messages(
+        self,
+        negotiation_id: str,
+        messages: list[dict],
+        error_message: str | None = None,
+    ) -> None:
+        if negotiation_id != self._current_chat_negotiation_id:
+            return
+        try:
+            md = self.query_one("#history_chat_markdown", Markdown)
+        except Exception:
+            return
+        if error_message:
+            md.update(error_message)
+            return
+        if not messages:
+            md.update("[dim]Сообщений нет.[/dim]")
+            return
+
+        def format_entry(entry: dict) -> str:
+            author_type = (entry.get("author") or {}).get("participant_type")
+            who = "Вы" if author_type == "applicant" else "Работодатель"
+            ts = self._message_time_label(entry.get("created_at"))
+            if author_type == "applicant":
+                status = "Прочитано работодателем" if entry.get("viewed_by_opponent") else "Не прочитано"
+            else:
+                status = "Прочитано" if entry.get("viewed_by_me") else "Не прочитано"
+            body = entry.get("text") or ""
+            return f"**{who}** ({ts})\n\n{body}\n\n[dim]{status}[/dim]"
+
+        sorted_messages = sorted(
+            messages,
+            key=lambda m: m.get("created_at") or "",
+        )
+        md.update("\n\n---\n\n".join(format_entry(e) for e in sorted_messages))
 
     async def fetch_history_details(self, vacancy_id: str) -> None:
         try:
