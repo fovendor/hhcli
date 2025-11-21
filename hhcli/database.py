@@ -1025,10 +1025,79 @@ def load_profile(profile_name: str) -> dict | None:
         return None
 
 def delete_profile(profile_name: str):
+    """Удаляет профиль и все связанные данные (настройки, историю, кеши)."""
+    if not profile_name:
+        return
     with engine.connect() as connection:
-        stmt = delete(profiles).where(profiles.c.profile_name == profile_name)
+        # История откликов
+        connection.execute(delete(negotiation_history).where(negotiation_history.c.profile_name == profile_name))
+        # Конфигурации и связанные таблицы
+        connection.execute(delete(config_professional_roles).where(config_professional_roles.c.profile_name == profile_name))
+        connection.execute(delete(config_negative_keywords).where(config_negative_keywords.c.profile_name == profile_name))
+        connection.execute(delete(config_positive_keywords).where(config_positive_keywords.c.profile_name == profile_name))
+        connection.execute(delete(profile_configs).where(profile_configs.c.profile_name == profile_name))
+        # app_state: активный профиль и время синка истории
+        connection.execute(
+            delete(app_state).where(
+                (app_state.c.key == AppStateKeys.ACTIVE_PROFILE)
+                | (app_state.c.key == f"{AppStateKeys.LAST_NEGOTIATION_SYNC_PREFIX}{profile_name}")
+            )
+        )
+        # Сам профиль
+        connection.execute(delete(profiles).where(profiles.c.profile_name == profile_name))
+        connection.commit()
+
+
+def clear_active_profile(profile_name: str | None = None) -> None:
+    """Очищает активный профиль, если задан или любая запись, если профиль не указан."""
+    with engine.connect() as connection:
+        stmt = delete(app_state).where(app_state.c.key == AppStateKeys.ACTIVE_PROFILE)
+        if profile_name:
+            stmt = stmt.where(app_state.c.value == profile_name)
         connection.execute(stmt)
         connection.commit()
+
+def vacuum_database() -> None:
+    """Упаковывает SQLite и возвращает свободное место на диске."""
+    if not engine:
+        return
+    raw_conn = engine.raw_connection()
+    try:
+        cursor = raw_conn.cursor()
+        try:
+            cursor.execute("VACUUM")
+            raw_conn.commit()
+        finally:
+            cursor.close()
+    finally:
+        raw_conn.close()
+
+def cleanup_vacancy_cache(max_age_days: int = 5) -> int:
+    """Удаляет кэш вакансий старше заданного количества дней."""
+    if not engine:
+        return 0
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    with engine.connect() as connection:
+        result = connection.execute(delete(vacancy_cache).where(vacancy_cache.c.cached_at < cutoff))
+        connection.commit()
+        removed = result.rowcount or 0
+    if removed:
+        vacuum_database()
+    return removed
+
+
+def cleanup_app_logs(max_age_days: int = 20) -> int:
+    """Удаляет строки логов старше заданного количества дней."""
+    if not engine:
+        return 0
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    with engine.connect() as connection:
+        result = connection.execute(delete(app_logs).where(app_logs.c.timestamp < cutoff))
+        connection.commit()
+        removed = result.rowcount or 0
+    if removed:
+        vacuum_database()
+    return removed
 
 def get_all_profiles() -> list[dict]:
     with engine.connect() as connection:

@@ -8,8 +8,16 @@ from textual.widgets import Button, Footer, OptionList, Static
 from textual.widgets._option_list import Option
 
 from ...constants import LogSource, SearchMode
-from ...database import load_profile_config, log_to_db
+from ...database import (
+    clear_active_profile,
+    delete_profile,
+    get_all_profiles,
+    load_profile_config,
+    log_to_db,
+)
+from ..dialogs import CodeConfirmationDialog
 from .config import ConfigScreen
+from .profile_select import ProfileSelectionScreen
 from .vacancy_list import VacancyListScreen
 
 
@@ -40,7 +48,7 @@ class SearchModeScreen(Screen):
                         with Vertical(id="search_mode_content"):
                             yield OptionList(id="search_mode_list")
                             with Vertical(id="search_mode_actions"):
-                                yield Button("Открыть настройки", id="search_mode_config_btn", variant="primary")
+                                yield Button("Удалить профиль", id="search_mode_delete_btn", variant="error")
             yield Footer()
 
     def action_handle_escape(self) -> None:
@@ -73,8 +81,8 @@ class SearchModeScreen(Screen):
             self.action_run_search(str(option_id))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "search_mode_config_btn":
-            self.action_edit_config()
+        if event.button.id == "search_mode_delete_btn":
+            self._confirm_delete_profile()
 
     def action_run_search(self, mode: str) -> None:
         log_to_db("INFO", LogSource.SEARCH_MODE_SCREEN, f"Выбран режим '{mode}'")
@@ -98,6 +106,70 @@ class SearchModeScreen(Screen):
                     resume_title=self.resume_title,
                 )
             )
+
+    def _confirm_delete_profile(self) -> None:
+        profile_name = self.app.client.profile_name or ""
+        if not profile_name:
+            self.app.notify("Нет активного профиля для удаления.", title="Профиль", severity="warning", timeout=4)
+            return
+        message = (
+            f"Профиль [b]{profile_name}[/b] и все связанные данные (история откликов, кэш, настройки) "
+            "будут безвозвратно удалены.\nВведите число: [b red]{code}[/b red] для подтверждения."
+        )
+        dialog = CodeConfirmationDialog(
+            title="Удаление профиля",
+            message=message,
+            confirm_label="Удалить",
+            confirm_variant="error",
+        )
+        self.app.push_screen(dialog, self._handle_profile_delete_result)
+
+    def _handle_profile_delete_result(self, decision: str | None) -> None:
+        if decision != "submit":
+            self.query_one(OptionList).focus()
+            return
+        self.run_worker(self._delete_profile_worker(), thread=True, exclusive=True)
+
+    async def _delete_profile_worker(self) -> None:
+        profile_name = self.app.client.profile_name or ""
+        if not profile_name:
+            self.app.call_from_thread(
+                self.app.notify,
+                "Нет активного профиля для удаления.",
+                title="Профиль",
+                severity="warning",
+                timeout=4,
+            )
+            return
+        try:
+            delete_profile(profile_name)
+            clear_active_profile(profile_name)
+            log_to_db("INFO", LogSource.SEARCH_MODE_SCREEN, f"Профиль '{profile_name}' удалён.")
+            remaining = get_all_profiles()
+            self.app.call_from_thread(self._after_profile_deleted, profile_name, remaining)
+        except Exception as exc:  # pragma: no cover
+            log_to_db("ERROR", LogSource.SEARCH_MODE_SCREEN, f"Не удалось удалить профиль '{profile_name}': {exc}")
+            self.app.call_from_thread(
+                self.app.notify,
+                f"Не удалось удалить профиль: {exc}",
+                title="Профиль",
+                severity="error",
+                timeout=4,
+            )
+
+    def _after_profile_deleted(self, profile_name: str, remaining_profiles: list[dict]) -> None:
+        if self.app.client.profile_name == profile_name:
+            self.app.client.profile_name = None
+            self.app.client.access_token = None
+        self.app.notify(
+            f"Профиль '{profile_name}' удалён со всеми данными.",
+            title="Профиль",
+            severity="warning",
+            timeout=5,
+        )
+        if self.app.screen is self:
+            self.app.pop_screen()
+        self.app.push_screen(ProfileSelectionScreen(remaining_profiles), self.app.on_profile_selected)
 
 
 __all__ = ["SearchModeScreen"]

@@ -2,11 +2,13 @@ import sys
 
 from hhcli.client import HHApiClient
 from hhcli.database import (
-    init_db,
-    set_active_profile,
+    cleanup_app_logs,
+    cleanup_vacancy_cache,
     get_active_profile_name,
-    log_to_db,
     get_db_info,
+    init_db,
+    log_to_db,
+    set_active_profile,
 )
 from hhcli.ui.tui import HHCliApp
 from hhcli.version import get_version
@@ -32,6 +34,15 @@ def run():
         return
 
     init_db()
+    cache_purged = cleanup_vacancy_cache()
+    logs_purged = cleanup_app_logs()
+    if cache_purged or logs_purged:
+        log_to_db(
+            "INFO",
+            "Main",
+            f"Очистка БД при запуске: кэш вакансий (-{cache_purged}), логи (-{logs_purged}).",
+        )
+
     log_to_db("INFO", "Main", "Запуск приложения hhcli.")
 
     if "--auth" in args:

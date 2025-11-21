@@ -647,34 +647,31 @@ SelectOverlay > .option-list--option-hover-highlighted-disabled {
     border: round $focus-ring;
 }
 
-/* --- 6. Модальное подтверждение настроек --- */
+/* --- 6. Модальные подтверждения --- */
 
 ConfigUnsavedChangesDialog,
-ApplyConfirmationDialog {
+ApplyConfirmationDialog,
+CodeConfirmationDialog {
     layer: modal;
     align: center middle;
     background: $overlay-scrim;
 }
 
-ConfigUnsavedChangesDialog #config-confirm-center {
+#config-confirm-center {
     width: 30%;
-    height: 20%;
+    height: 25%;
+    min-width: 40;
+    min-height: 12;
 }
 
-ApplyConfirmationDialog #config-confirm-center {
-    width: 30%;
-    height: 29%;
-}
-
-ConfigUnsavedChangesDialog #config-confirm-dialog,
-ApplyConfirmationDialog #config-confirm-dialog {
+#config-confirm-dialog {
     border-title-color: $accent-primary;
     background: $surface-panel;
     border: round $accent-primary;
+    padding: 1;
 }
 
-ConfigUnsavedChangesDialog #config-confirm-dialog > .config-confirm__message,
-ApplyConfirmationDialog #config-confirm-dialog > .config-confirm__message {
+#config-confirm-dialog > .config-confirm__message {
     color: $text-strong;
     text-style: bold;
     text-align: center;
@@ -683,27 +680,25 @@ ApplyConfirmationDialog #config-confirm-dialog > .config-confirm__message {
     padding: 1 0;
 }
 
-ConfigUnsavedChangesDialog .config-confirm__buttons,
-ApplyConfirmationDialog .config-confirm__buttons {
+.config-confirm__buttons {
     width: 100%;
     content-align-horizontal: center;
     align: center bottom;
-    padding-bottom: 1;
+    padding: 0 0 1 0;
 }
 
-ConfigUnsavedChangesDialog .config-confirm__buttons > Button,
-ApplyConfirmationDialog .config-confirm__buttons > Button {
+.config-confirm__buttons > Button {
     min-width: 16;
     margin: 0 1;
 }
 
-ApplyConfirmationDialog #apply_confirm_input {
+#confirm_code_input {
     content-align: center middle;
     width: 80%;
     margin: 0 0 1 0;
 }
 
-ApplyConfirmationDialog #apply_confirm_error {
+#confirm_code_error {
     min-height: 2;
     color: $status-error;
     text-align: center;
