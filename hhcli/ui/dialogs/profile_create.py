@@ -16,8 +16,9 @@ class ProfileCreateDialog(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Center(id="profile-create-center"):
-            with Vertical(id="profile-create-dialog"):
-                yield Static("Введите имя нового профиля:", id="profile-create-label")
+            with Vertical(id="profile-create-dialog") as dialog:
+                dialog.border_title = "Новый профиль"
+                dialog.styles.border_title_align = "left"
                 yield Input(placeholder="Например: analyst", id="profile-create-input")
                 with Horizontal(id="profile-create-buttons"):
                     yield Button("Создать", id="profile-create-submit", variant="primary", disabled=True)

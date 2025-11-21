@@ -23,7 +23,7 @@ from .css_manager import CssManager
 from .scrollbars import ThinScrollBarRender
 from .modules.dictionaries import cache_dictionaries as cache_dictionaries_service
 from .screens.profile_select import ProfileSelectionScreen
-from .screens.resume_select import ResumeSelectionScreen
+from .dialogs import ResumeSelectDialog
 from .screens.search_mode import SearchModeScreen
 
 CSS_MANAGER = CssManager()
@@ -108,17 +108,17 @@ class HHCliApp(App):
             log_to_db("INFO", LogSource.TUI, f"Загрузка резюме для '{profile_name}'")
             resumes = self.client.get_my_resumes()
             items = (resumes or {}).get("items") or []
+            if not items:
+                self.notify("У вас нет ни одного резюме. Создайте резюме на hh.ru и попробуйте снова.",
+                            title="Резюме", severity="warning", timeout=5)
+                self.push_screen(ProfileSelectionScreen(get_all_profiles()), self.on_profile_selected)
+                return
+
             if len(items) == 1:
                 r = items[0]
-                self.push_screen(
-                    SearchModeScreen(
-                        resume_id=r["id"],
-                        resume_title=r["title"],
-                        is_root_screen=True,
-                    )
-                )
+                self._open_search_mode(r["id"], r.get("title") or "", is_root=True)
             else:
-                self.push_screen(ResumeSelectionScreen(resume_data=resumes))
+                self.push_screen(ResumeSelectDialog(items), lambda result: self._on_resume_selected(profile_name, result))
         except AuthorizationPending as auth_exc:
             log_to_db(
                 "WARN",
@@ -138,6 +138,24 @@ class HHCliApp(App):
         except Exception as exc:
             log_to_db("ERROR", LogSource.TUI, f"Критическая ошибка профиля/резюме: {exc}")
             self.exit(result=exc)
+
+    def _on_resume_selected(self, profile_name: str, result: tuple[str, str] | None) -> None:
+        if not result:
+            # Возвращаемся к выбору профиля, если пользователь отменил модалку
+            self.push_screen(ProfileSelectionScreen(get_all_profiles()), self.on_profile_selected)
+            return
+        resume_id, resume_title = result
+        log_to_db("INFO", LogSource.RESUME_SCREEN, f"Выбрано резюме: {resume_id} '{resume_title}'")
+        self._open_search_mode(resume_id, resume_title, is_root=True)
+
+    def _open_search_mode(self, resume_id: str, resume_title: str, *, is_root: bool) -> None:
+        self.push_screen(
+            SearchModeScreen(
+                resume_id=resume_id,
+                resume_title=resume_title,
+                is_root_screen=is_root,
+            )
+        )
 
     def _sync_history_worker(self) -> None:
         """Синхронизирует историю откликов и обрабатывает запрос повторной авторизации"""
