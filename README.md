@@ -36,6 +36,8 @@
 ```bash
 sudo apt update && sudo apt install python3 python3-pip pipx git -y
 pipx install hhcli
+python3 -m pipx ensurepath
+# Перезапустите терминал прежде, чем запускать программу
 ```
 
 #### Arch / Manjaro (pacman)
@@ -43,6 +45,8 @@ pipx install hhcli
 ```bash
 sudo pacman -Syu python python-pip pipx git
 pipx install hhcli
+python3 -m pipx ensurepath
+# Перезапустите терминал прежде, чем запускать программу
 ```
 
 #### Fedora / RHEL / Rocky (dnf / yum)
@@ -50,6 +54,8 @@ pipx install hhcli
 ```bash
 sudo dnf install python3 python3-pip pipx git  # либо sudo yum install ...
 pipx install hhcli
+python3 -m pipx ensurepath
+# Перезапустите терминал прежде, чем запускать программу
 ```
 
 #### Другие дистрибутивы
