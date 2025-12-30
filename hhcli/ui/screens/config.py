@@ -437,7 +437,7 @@ class ConfigScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="config_screen"):
-            yield Header(show_clock=True, name="hh-cli - Настройки")
+            yield Header(show_clock=True, name="hhcli - Настройки")
             with VerticalScroll(id="config-form"):
                 yield Static("Параметры поиска", classes="header")
                 yield Label("Ключевые слова для поиска (через запятую):")

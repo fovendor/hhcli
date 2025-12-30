@@ -198,6 +198,27 @@ app_logs = Table(
     Column("message", Text)
 )
 
+http_metrics = Table(
+    "http_metrics",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("timestamp", DateTime, server_default=func.now()),
+    Column("method", String(8), nullable=False),
+    Column("endpoint", String, nullable=False),
+    Column("status", Integer),
+    Column("delay_ms", Integer),
+)
+
+oauth_events = Table(
+    "oauth_events",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("timestamp", DateTime, server_default=func.now()),
+    Column("profile_name", String),
+    Column("event", String(50), nullable=False),
+    Column("details", Text),
+)
+
 negotiation_history = Table(
     "negotiation_history",
     metadata,
@@ -843,6 +864,33 @@ def log_to_db(level: str, source: str, message: str):
         connection.execute(stmt)
         connection.commit()
 
+
+def log_http_metric(method: str, endpoint: str, status: int | None, delay_ms: int):
+    if not engine:
+        return
+    with engine.connect() as connection:
+        stmt = insert(http_metrics).values(
+            method=method,
+            endpoint=endpoint,
+            status=status,
+            delay_ms=delay_ms,
+        )
+        connection.execute(stmt)
+        connection.commit()
+
+
+def log_oauth_event(profile_name: str | None, event: str, details: str = ""):
+    if not engine:
+        return
+    with engine.connect() as connection:
+        stmt = insert(oauth_events).values(
+            profile_name=profile_name,
+            event=event,
+            details=details,
+        )
+        connection.execute(stmt)
+        connection.commit()
+
 def record_apply_action(
         vacancy_id: str,
         profile_name: str,
@@ -976,9 +1024,6 @@ def save_or_update_profile(
     токены для существующего.
     """
     with engine.connect() as connection, connection.begin():
-        stmt = select(profiles).where(profiles.c.hh_user_id == user_info['id'])
-        existing = connection.execute(stmt).first()
-
         profile_values = {
             "hh_user_id": user_info['id'], "email": user_info.get('email', ''),
             "access_token": token_data["access_token"],
@@ -986,11 +1031,29 @@ def save_or_update_profile(
             "expires_at": expires_at
         }
 
-        if existing:
-            connection.execute(update(profiles).where(
-                profiles.c.hh_user_id == user_info['id']
-            ).values(profile_name=profile_name, **profile_values))
+        existing_by_name = connection.execute(
+            select(profiles).where(profiles.c.profile_name == profile_name)
+        ).first()
+        existing_by_user = connection.execute(
+            select(profiles).where(profiles.c.hh_user_id == user_info["id"])
+        ).first()
+
+        is_new_profile = False
+
+        if existing_by_name:
+            connection.execute(
+                update(profiles)
+                .where(profiles.c.profile_name == profile_name)
+                .values(**profile_values)
+            )
+        elif existing_by_user:
+            connection.execute(
+                update(profiles)
+                .where(profiles.c.hh_user_id == user_info["id"])
+                .values(profile_name=profile_name, **profile_values)
+            )
         else:
+            is_new_profile = True
             connection.execute(insert(profiles).values(
                 profile_name=profile_name, **profile_values))
 

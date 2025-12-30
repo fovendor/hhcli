@@ -224,7 +224,7 @@ class VacancyListScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="vacancy_screen"):
-            yield Header(show_clock=True, name="hh-cli")
+            yield Header(show_clock=True, name="hhcli")
             with Horizontal(id="vacancy_layout"):
                 with Vertical(
                         id="vacancy_panel", classes="pane"

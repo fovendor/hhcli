@@ -92,7 +92,7 @@ class ProfileSelectionScreen(Screen):
             self.app.notify("Такое имя профиля уже существует.", title="Профиль", severity="warning")
             return
         self.app.notify(f"Запуск авторизации для профиля {normalized}...", title="Профиль")
-        self.run_worker(self._create_profile_worker(normalized), thread=True, exclusive=True)
+        self.run_worker(self._create_profile_worker(normalized), thread=False, exclusive=True)
 
     async def _create_profile_worker(self, profile_name: str):
         try:
@@ -100,10 +100,9 @@ class ProfileSelectionScreen(Screen):
             if success:
                 set_active_profile(profile_name)
                 log_to_db("INFO", LogSource.PROFILE_SCREEN, f"Профиль '{profile_name}' создан.")
-                self.app.call_from_thread(self.dismiss, profile_name)
+                self.dismiss(profile_name)
             else:
-                self.app.call_from_thread(
-                    self.app.notify,
+                self.app.notify(
                     "Авторизация не завершена.",
                     title="Профиль",
                     severity="error",
@@ -111,12 +110,11 @@ class ProfileSelectionScreen(Screen):
                 )
         except Exception as exc:  # pragma: no cover
             log_to_db("ERROR", LogSource.PROFILE_SCREEN, f"Ошибка создания профиля: {exc}")
-            self.app.call_from_thread(
-                self.app.notify,
+            self.app.notify(
                 f"Не удалось создать профиль: {exc}",
                 title="Профиль",
                 severity="error",
-                timeout=4,
+                timeout=6,
             )
 
     def _select_profile(self, profile_name: str) -> None:

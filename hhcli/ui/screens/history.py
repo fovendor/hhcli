@@ -82,7 +82,7 @@ class NegotiationHistoryScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="history_screen"):
-            yield Header(show_clock=True, name="hh-cli")
+            yield Header(show_clock=True, name="hhcli")
             if self.resume_title:
                 yield Static(
                     f"Резюме: [b cyan]{self.resume_title}[/b cyan]\n",

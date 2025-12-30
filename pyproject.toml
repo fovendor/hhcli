@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hhcli"
-version = "0.4.0"
+version = "0.5.0"
 description = "Неофициальный CLI-клиент для поиска работы и откликов на hh.ru."
 authors = ["fovendor <fovendor@gmail.com>"]
 readme = "README.md"
@@ -16,6 +16,7 @@ platformdirs = "^4.0.0"
 sqlalchemy = "^2.0.23"
 textual = "*"
 html2text = "^2025.4.15"
+pywebview = ">=4,<5"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.6"
@@ -26,4 +27,4 @@ hhcli = "hhcli.main:run"
 
 [build-system]
 requires = ["poetry-core"]
-build-backend = "poetry.core.main:api"
+build-backend = "poetry.core.masonry.api"

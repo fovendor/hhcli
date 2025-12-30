@@ -1,14 +1,12 @@
-# hh-cli
+# hhcli
 
 [![PyPI version](https://img.shields.io/pypi/v/hhcli.svg)](https://pypi.org/project/hhcli/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Follow on Telegram](https://img.shields.io/badge/Telegram-Join-blue?logo=telegram)](https://t.me/hhcli)
 
-Неофициальный CLI-клиент для поиска работы и откликов на hh.ru.
+`hhcli` — это неофициальный CLI-клиент для поиска работы и откликов на hh.ru, позволяющий искать вакансии, просматривать их, отмечать понравившиеся и откликаться на них в интерфейсе терминала. 
 
-> Важно! С 15.12.2025 года hh.ru отключил соискательский API, ввиду чего hhcli временно не работает. Решение есть, ожидайте новых релизов с обходом ограничения.
-
-`hh-cli` — это приложение, позволяющее искать вакансии, просматривать их, отмечать понравившиеся и откликаться на них в интерфейсе терминала. У приложения есть [канал в Telegram](https://t.me/hhcli), где публикуются основные новости проекта.
+> У приложения есть [канал в Telegram](https://t.me/hhcli), где публикуются основные новости проекта.
 
 ![gif-of-hhcli](img/review.gif "A short demo CLI TUI interface").
 
@@ -34,7 +32,9 @@
 #### Ubuntu / Debian / Mint (apt)
 
 ```bash
-sudo apt update && sudo apt install python3 python3-pip pipx git -y
+sudo apt update && sudo apt install -y \
+  python3 python3-pip pipx git \
+  python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0
 pipx install hhcli
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
@@ -53,6 +53,8 @@ python3 -m pipx ensurepath
 
 ```bash
 sudo dnf install python3 python3-pip pipx git  # либо sudo yum install ...
+# Пакеты WebKit2GTK могут называться webkit2gtk4.1 / webkit2gtk3 / pywebkitgtk
+sudo dnf install webkit2gtk4.1 gtk3 gobject-introspection
 pipx install hhcli
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
@@ -61,6 +63,7 @@ python3 -m pipx ensurepath
 #### Другие дистрибутивы
 
 - Установите Python ≥3.9 и `pipx` из стандартного репозитория.
+- Установите WebKit2GTK+ и Python GObject bindings (названия пакетов зависят от дистрибутива).
 - Выполните `pipx install hhcli`.
 - Если `pipx` отсутствует, можно поставить локально: `pip install --user pipx && pipx ensurepath`.
 
@@ -86,6 +89,7 @@ pipx install hhcli
 ```
 
 > После установки откройте новое окно PowerShell/Command Prompt, чтобы PATH подхватил `C:\Users\<имя>\.local\bin`. Если команда `hhcli` всё ещё не находится, убедитесь, что этот путь внесён в переменные среды (Параметры → Система → Дополнительные параметры → Переменные среды) и перезапустите терминал.
+> Для рендеринга окна авторизации нужен WebView2 Runtime. Обычно он уже предустановлен в Windows 10/11. Если нет — скачайте с [сайта Microsoft](https://developer.microsoft.com/nl-nl/microsoft-edge/webview2?form=MA13LH).
 
 #### Обновление / удаление
 
@@ -108,6 +112,8 @@ pipx install hhcli
 ```bash
 hhcli
 ```
+
+Откроется встроенное окно авторизации. Если окно не открывается — проверьте, что установлены зависимости WebKit2GTK (Linux) или WebView2 Runtime (Windows).
 
 #### 2. Настройка
 

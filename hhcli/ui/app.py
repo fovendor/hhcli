@@ -46,7 +46,7 @@ class HHCliApp(App):
         self.client = client
         self.dictionaries = {}
         self.css_manager = CSS_MANAGER
-        self.title = "hh-cli"
+        self.title = "hhcli"
         self._ctrl_c_armed: bool = False
         self._ctrl_c_reset_timer = None
 
