@@ -30,6 +30,10 @@ jobs:
           virtualenvs-in-project: true
           installer-parallel: true
 
+      # Шаг 3.5: очищаем старые артефакты, чтобы не залить предыдущую версию
+      - name: Clean dist artifacts
+        run: rm -rf dist
+
       # Шаг 4: Собирает пакет, создаём wheel и sdist в каталоге /dist
       - name: Build package
         run: poetry build
