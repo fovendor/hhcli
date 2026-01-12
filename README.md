@@ -35,7 +35,7 @@
 sudo apt update && sudo apt install -y \
   python3 python3-pip pipx git \
   python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0
-pipx install hhcli
+pipx install hhcli --system-site-packages
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
 ```
@@ -44,7 +44,7 @@ python3 -m pipx ensurepath
 
 ```bash
 sudo pacman -Syu python python-pip pipx git
-pipx install hhcli
+pipx install hhcli --system-site-packages
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
 ```
@@ -55,7 +55,7 @@ python3 -m pipx ensurepath
 sudo dnf install python3 python3-pip pipx git  # либо sudo yum install ...
 # Пакеты WebKit2GTK могут называться webkit2gtk4.1 / webkit2gtk3 / pywebkitgtk
 sudo dnf install webkit2gtk4.1 gtk3 gobject-introspection
-pipx install hhcli
+pipx install hhcli --system-site-packages
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
 ```
@@ -64,7 +64,7 @@ python3 -m pipx ensurepath
 
 - Установите Python ≥3.9 и `pipx` из стандартного репозитория.
 - Установите WebKit2GTK+ и Python GObject bindings (названия пакетов зависят от дистрибутива).
-- Выполните `pipx install hhcli`.
+- Выполните `pipx install hhcli --system-site-packages`.
 - Если `pipx` отсутствует, можно поставить локально: `pip install --user pipx && pipx ensurepath`.
 
 ### Windows
@@ -113,7 +113,12 @@ pipx install hhcli
 hhcli
 ```
 
-Откроется встроенное окно авторизации. Если окно не открывается — проверьте, что установлены зависимости WebKit2GTK (Linux) или WebView2 Runtime (Windows).
+Откроется встроенное окно авторизации. Если окно не открывается или после ввода пароля ничего не происходит:
+
+- Linux: переустановите с доступом к системным пакетам и убедитесь, что WebKit2GTK на месте:  
+  `sudo apt install python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0`  
+  `pipx install hhcli --force --system-site-packages`
+- Windows 10/11: установите или обновите [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) и перезапустите терминал.
 
 #### 2. Настройка
 

@@ -1,3 +1,4 @@
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -53,6 +54,7 @@ class HHApiClient:
         self._auth_in_progress = False
         self._last_auth_url: str | None = None
         self._last_request_ts = time.monotonic()
+        self._preferred_gui = self._detect_preferred_gui()
 
         self.session = requests.Session()
         self.session.headers.update(
@@ -100,6 +102,7 @@ class HHApiClient:
             f"Запускаю авторизацию через pywebview для '{self.profile_name}'. {log_details}",
         )
         try:
+            self._ensure_webview_backend_available()
             success = self.authorize(self.profile_name)
             if success:
                 log_to_db(
@@ -114,13 +117,7 @@ class HHApiClient:
                     f"Авторизация профиля '{self.profile_name}' завершилась с ошибкой.",
                 )
         except WebViewException as exc:
-            msg = (
-                "pywebview не смог инициализировать GUI. "
-                "Установите GTK+WebKit или Qt с Python-расширениями. "
-                "Например, в Ubuntu 24.04: "
-                "`sudo apt install python3-gi gir1.2-webkit2-4.1 "
-                "gir1.2-gtk-3.0 libwebkit2gtk-4.1-0`."
-            )
+            msg = self._format_webview_dependency_message(exc)
             log_to_db("ERROR", LogSource.OAUTH, f"{msg} Детали: {exc}")
             raise RuntimeError(msg) from exc
         except Exception as exc:  # noqa: BLE001
@@ -260,6 +257,10 @@ class HHApiClient:
             except Exception:
                 pass
 
+        webview_kwargs: dict[str, str] = {}
+        if self._preferred_gui:
+            webview_kwargs["gui"] = self._preferred_gui
+
         window = webview.create_window(
             "Авторизация hh.ru",
             url=auth_url,
@@ -280,7 +281,7 @@ class HHApiClient:
                     break
                 time.sleep(0.2)
 
-        webview.start(func=watch_redirect, debug=False)
+        webview.start(func=watch_redirect, debug=False, **webview_kwargs)
 
         if not event.is_set():
             log_to_db(
@@ -326,6 +327,57 @@ class HHApiClient:
         self._save_token(token_data, user_info_resp.json())
         log_oauth_event(self.profile_name, "auth_success")
         return True
+
+    @staticmethod
+    def _detect_preferred_gui() -> str | None:
+        if sys.platform.startswith("win"):
+            # Принудительно используем WebView2 и не даём откатиться на IE (mshtml),
+            # иначе страница hh.ru может не отрабатывать.
+            return "edgechromium"
+        return None
+
+    @staticmethod
+    def _ensure_webview_backend_available() -> None:
+        available = getattr(webview, "guis", [])
+        if available:
+            return
+        if sys.platform.startswith("win"):
+            raise RuntimeError(
+                "pywebview не видит WebView2. Установите Microsoft Edge WebView2 Runtime "
+                "и перезапустите терминал."
+            )
+        if sys.platform.startswith("linux"):
+            raise RuntimeError(
+                "pywebview не нашёл доступный GUI-бэкенд. "
+                "Установите системные пакеты WebKit2GTK и дайте к ним доступ из pipx:\n"
+                "  sudo apt install python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0\n"
+                "  pipx install hhcli --force --system-site-packages\n"
+                "Если запускаете в контейнере без GUI — используйте x11/wayland или виртуальный дисплей."
+            )
+        raise RuntimeError(
+            "pywebview не смог инициализировать GUI. Убедитесь, что установлен поддерживаемый веб-движок."
+        )
+
+    @staticmethod
+    def _format_webview_dependency_message(exc: Exception) -> str:
+        if sys.platform.startswith("win"):
+            return (
+                "pywebview не смог инициализировать WebView2. "
+                "Установите Microsoft Edge WebView2 Runtime: "
+                "https://developer.microsoft.com/microsoft-edge/webview2/ "
+                "и перезапустите приложение."
+            )
+        if sys.platform.startswith("linux"):
+            return (
+                "pywebview не смог инициализировать GUI. "
+                "Установите WebKit2GTK и разрешите pipx использовать системные пакеты: "
+                "`sudo apt install python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0` "
+                "затем `pipx install hhcli --force --system-site-packages`."
+            )
+        return (
+            "pywebview не смог инициализировать GUI. "
+            "Убедитесь, что установлены зависимости веб-движка для вашей ОС."
+        )
 
     def _request(self, method: str, endpoint: str, **kwargs):
         try:
