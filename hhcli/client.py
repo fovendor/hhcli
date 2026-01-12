@@ -102,7 +102,6 @@ class HHApiClient:
             f"Запускаю авторизацию через pywebview для '{self.profile_name}'. {log_details}",
         )
         try:
-            self._ensure_webview_backend_available()
             success = self.authorize(self.profile_name)
             if success:
                 log_to_db(
@@ -281,7 +280,19 @@ class HHApiClient:
                     break
                 time.sleep(0.2)
 
-        webview.start(func=watch_redirect, debug=False, **webview_kwargs)
+        try:
+            webview.start(func=watch_redirect, debug=False, **webview_kwargs)
+        except WebViewException as exc:
+            # Fallback: если принудительный GUI (edgechromium) не сработал, пробуем авто-выбор.
+            if webview_kwargs.get("gui"):
+                log_to_db(
+                    "WARN",
+                    LogSource.OAUTH,
+                    f"Не удалось запустить pywebview c gui={webview_kwargs['gui']}, пробуем авто. Ошибка: {exc}",
+                )
+                webview.start(func=watch_redirect, debug=False)
+            else:
+                raise
 
         if not event.is_set():
             log_to_db(
@@ -335,28 +346,6 @@ class HHApiClient:
             # иначе страница hh.ru может не отрабатывать.
             return "edgechromium"
         return None
-
-    @staticmethod
-    def _ensure_webview_backend_available() -> None:
-        available = getattr(webview, "guis", [])
-        if available:
-            return
-        if sys.platform.startswith("win"):
-            raise RuntimeError(
-                "pywebview не видит WebView2. Установите Microsoft Edge WebView2 Runtime "
-                "и перезапустите терминал."
-            )
-        if sys.platform.startswith("linux"):
-            raise RuntimeError(
-                "pywebview не нашёл доступный GUI-бэкенд. "
-                "Установите системные пакеты WebKit2GTK и дайте к ним доступ из pipx:\n"
-                "  sudo apt install python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0\n"
-                "  pipx install hhcli --force --system-site-packages\n"
-                "Если запускаете в контейнере без GUI — используйте x11/wayland или виртуальный дисплей."
-            )
-        raise RuntimeError(
-            "pywebview не смог инициализировать GUI. Убедитесь, что установлен поддерживаемый веб-движок."
-        )
 
     @staticmethod
     def _format_webview_dependency_message(exc: Exception) -> str:
