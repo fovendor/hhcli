@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll, Horizontal, Center
 from textual.screen import Screen, ModalScreen
+from textual.timer import Timer
 from textual.widgets import (
     Button,
     Footer,
@@ -19,6 +21,7 @@ from textual.widgets import (
 )
 from textual.widgets._selection_list import Selection
 
+from ...client import AuthorizationPending
 from ...database import (
     list_areas,
     list_professional_roles,
@@ -327,6 +330,27 @@ class ConfigScreen(Screen):
         Binding("ctrl+s", "save_config", "Сохранить"),
     ]
 
+    def __init__(self, resume_id: str | None = None, resume_title: str | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.resume_id = resume_id
+        self.resume_title = resume_title
+        self._raise_timer: Timer | None = None
+        self._next_publish_at: datetime | None = None
+        self._remaining_seconds: int = 0
+        self._publish_in_progress: bool = False
+        self._quit_binding_q = None
+        self._quit_binding_cyrillic = None
+        self._areas: list[AreaOption] = []
+        self._roles: list[RoleOption] = []
+        self._selected_area_id: str | None = None
+        self._selected_role_ids: list[str] = []
+        self._initial_config: dict[str, Any] = {}
+        self._form_loaded = False
+        self._confirm_dialog_active = False
+        self._initial_theme_name: str | None = None
+        self._preview_theme_name: str | None = None
+        self._theme_committed: bool = False
+
     LAYOUT_SECTIONS: ClassVar[tuple[LayoutSectionDef, ...]] = (
         LayoutSectionDef(
             "Экран поиска вакансий",
@@ -420,21 +444,6 @@ class ConfigScreen(Screen):
         field for section in LAYOUT_SECTIONS for field in section.fields
     )
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._quit_binding_q = None
-        self._quit_binding_cyrillic = None
-        self._areas: list[AreaOption] = []
-        self._roles: list[RoleOption] = []
-        self._selected_area_id: str | None = None
-        self._selected_role_ids: list[str] = []
-        self._initial_config: dict[str, Any] = {}
-        self._form_loaded = False
-        self._confirm_dialog_active = False
-        self._initial_theme_name: str | None = None
-        self._preview_theme_name: str | None = None
-        self._theme_committed: bool = False
-
     def compose(self) -> ComposeResult:
         with Vertical(id="config_screen"):
             yield Header(show_clock=True, name="hhcli - Настройки")
@@ -472,7 +481,7 @@ class ConfigScreen(Screen):
                 yield Label("Период публикации (дней, 1-30):")
                 yield Input(id="period", placeholder="3")
 
-                yield Static("Отображение и отклики", classes="header")
+                yield Static("Переключатели", classes="header")
                 yield Horizontal(
                     Switch(id="skip_applied_in_same_company"),
                     Label("Пропускать компании, куда уже был отклик", classes="switch-label"),
@@ -493,6 +502,16 @@ class ConfigScreen(Screen):
                     Label("Зачеркивать вакансии по 'Название+Компания'", classes="switch-label"),
                     classes="switch-container",
                 )
+                yield Horizontal(
+                    Switch(id="auto_raise_resume"),
+                    Label("Поднимать резюме автоматически", classes="switch-label"),
+                    classes="switch-container",
+                )
+
+                yield Static("Поднятие резюме", classes="header")
+                yield Static("", id="resume_raise_status", classes="raise-status")
+                with Horizontal(classes="raise-actions"):
+                    yield Button("Поднять сейчас", id="raise_now_btn")
 
                 yield Static("Оформление", classes="header")
                 yield Label("Тема интерфейса:")
@@ -519,16 +538,20 @@ class ConfigScreen(Screen):
         bindings_map = self.app._bindings
         self._quit_binding_q = bindings_map.key_to_bindings.pop("q", None)
         self._quit_binding_cyrillic = bindings_map.key_to_bindings.pop("й", None)
+        self._refresh_raise_state()
 
         self.run_worker(self._load_data_worker, thread=True)
 
     def on_unmount(self) -> None:
-        """При размонтировании возвращаем глобальные биндинги"""
+        """При размонтировании возвращаем биндинги и останавливаем таймеры"""
         bindings_map = self.app._bindings
         if self._quit_binding_q:
             bindings_map.key_to_bindings['q'] = self._quit_binding_q
         if self._quit_binding_cyrillic:
             bindings_map.key_to_bindings['й'] = self._quit_binding_cyrillic
+        if self._raise_timer:
+            self._raise_timer.stop()
+            self._raise_timer = None
 
     def _load_data_worker(self) -> None:
         """Работает в фоне и загружает данные, не взаимодействуя с виджетами"""
@@ -594,6 +617,7 @@ class ConfigScreen(Screen):
         self.query_one("#deduplicate_by_name_and_company", Switch).value = config.get(ConfigKeys.DEDUPLICATE_BY_NAME_AND_COMPANY, True)
         self.query_one("#strikethrough_applied_vac", Switch).value = config.get(ConfigKeys.STRIKETHROUGH_APPLIED_VAC, True)
         self.query_one("#strikethrough_applied_vac_name", Switch).value = config.get(ConfigKeys.STRIKETHROUGH_APPLIED_VAC_NAME, True)
+        self.query_one("#auto_raise_resume", Switch).value = config.get(ConfigKeys.AUTO_RAISE_RESUME, False)
 
         manager = self.app.css_manager
         manager.reload_themes()
@@ -639,6 +663,7 @@ class ConfigScreen(Screen):
         self._initial_theme_name = current_theme_name
         self._preview_theme_name = current_theme_name
         self._theme_committed = False
+        self._refresh_raise_state()
         self._populate_layout_settings(config, defaults)
         self._initial_config = self._current_form_config()
         self._form_loaded = True
@@ -762,6 +787,7 @@ class ConfigScreen(Screen):
             ConfigKeys.DEDUPLICATE_BY_NAME_AND_COMPANY: self.query_one("#deduplicate_by_name_and_company", Switch).value,
             ConfigKeys.STRIKETHROUGH_APPLIED_VAC: self.query_one("#strikethrough_applied_vac", Switch).value,
             ConfigKeys.STRIKETHROUGH_APPLIED_VAC_NAME: self.query_one("#strikethrough_applied_vac_name", Switch).value,
+            ConfigKeys.AUTO_RAISE_RESUME: self.query_one("#auto_raise_resume", Switch).value,
             ConfigKeys.THEME: _theme_value(self.query_one("#theme", Select).value) or "hhcli-base",
         }
         for field in self.LAYOUT_FIELDS:
@@ -790,6 +816,8 @@ class ConfigScreen(Screen):
             self._open_area_picker()
         elif event.button.id == "roles_picker":
             self._open_roles_picker()
+        elif event.button.id == "raise_now_btn":
+            self._publish_now()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id != "theme":
@@ -863,3 +891,157 @@ class ConfigScreen(Screen):
         if not self._theme_committed:
             self._revert_theme_preview()
         super().dismiss(result)
+
+    def _refresh_raise_state(self) -> None:
+        try:
+            status = self.query_one("#resume_raise_status", Static)
+        except Exception:
+            status = None
+        try:
+            btn = self.query_one("#raise_now_btn", Button)
+        except Exception:
+            btn = None
+        if not self.resume_id:
+            if status:
+                status.update("Резюме не выбрано.")
+            if btn:
+                btn.disabled = True
+            return
+        if status:
+            status.update("Обновляем статус резюме...")
+        if btn:
+            btn.disabled = True
+        self.run_worker(self._raise_state_worker(), thread=True, exclusive=False)
+
+    async def _raise_state_worker(self):
+        try:
+            data = self.app.client.get_resume_details(self.resume_id)
+            next_raw = data.get("next_publish_at")
+            can_publish = data.get("can_publish_or_update", True)
+            next_dt = _parse_iso(next_raw)
+            remaining = 0
+            if next_dt:
+                delta = next_dt - datetime.now(tz=next_dt.tzinfo)
+                remaining = max(0, int(delta.total_seconds()))
+            self.app.call_from_thread(self._apply_raise_state, remaining, bool(can_publish))
+        except AuthorizationPending:
+            self.app.call_from_thread(
+                self.app.notify,
+                "Требуется повторная авторизация для статуса резюме.",
+                severity="warning",
+                timeout=4,
+            )
+        except Exception as exc:
+            self.app.call_from_thread(
+                self.app.notify,
+                f"Ошибка статуса резюме: {exc}",
+                severity="error",
+                timeout=4,
+            )
+            self.app.call_from_thread(self._apply_raise_state, 0, False)
+
+    def _apply_raise_state(self, remaining: int, can_publish: bool) -> None:
+        self._remaining_seconds = remaining
+        self._publish_in_progress = False
+        try:
+            status = self.query_one("#resume_raise_status", Static)
+        except Exception:
+            status = None
+        try:
+            btn = self.query_one("#raise_now_btn", Button)
+        except Exception:
+            btn = None
+        if not status or not btn:
+            return
+        if not can_publish:
+            status.update("Поднятие недоступно.")
+            btn.disabled = True
+            return
+        if remaining <= 0:
+            status.update("Можно поднять сейчас.")
+            btn.disabled = False
+            if self._raise_timer:
+                self._raise_timer.stop()
+                self._raise_timer = None
+        else:
+            status.update(f"Доступно через {self._format_remaining(remaining)}")
+            btn.disabled = True
+            self._start_raise_timer()
+
+    def _start_raise_timer(self) -> None:
+        if self._raise_timer:
+            self._raise_timer.stop()
+        if self._remaining_seconds <= 0:
+            return
+        self._raise_timer = self.set_interval(1.0, self._on_raise_tick, pause=False)
+
+    def _on_raise_tick(self) -> None:
+        if self._remaining_seconds <= 0:
+            if self._raise_timer:
+                self._raise_timer.stop()
+                self._raise_timer = None
+            self._apply_raise_state(0, True)
+            return
+        self._remaining_seconds = max(0, self._remaining_seconds - 1)
+        try:
+            status = self.query_one("#resume_raise_status", Static)
+        except Exception:
+            status = None
+        if status:
+            status.update(f"Доступно через {self._format_remaining(self._remaining_seconds)}")
+
+    def _format_remaining(self, seconds: int) -> str:
+        seconds = max(0, seconds)
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    def _publish_now(self) -> None:
+        if self._publish_in_progress or not self.resume_id:
+            return
+        self._publish_in_progress = True
+        try:
+            btn = self.query_one("#raise_now_btn", Button)
+        except Exception:
+            btn = None
+        if btn:
+            btn.disabled = True
+        try:
+            status = self.query_one("#resume_raise_status", Static)
+        except Exception:
+            status = None
+        if status:
+            status.update("Поднимаем резюме...")
+        self.run_worker(self._publish_worker(), thread=True, exclusive=False)
+
+    async def _publish_worker(self):
+        try:
+            self.app.client.publish_resume(self.resume_id)
+            self.app.call_from_thread(self.app.notify, "Резюме поднято", title="Поднятие", timeout=2)
+        except AuthorizationPending:
+            self.app.call_from_thread(
+                self.app.notify,
+                "Требуется авторизация для поднятия резюме.",
+                severity="warning",
+                timeout=4,
+            )
+        except Exception as exc:
+            self.app.call_from_thread(
+                self.app.notify,
+                f"Не удалось поднять резюме: {exc}",
+                severity="error",
+                timeout=4,
+            )
+        finally:
+            self.app.call_from_thread(self._refresh_raise_state)
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None

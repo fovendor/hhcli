@@ -31,6 +31,7 @@ class ConfigKeys:
     DEDUPLICATE_BY_NAME_AND_COMPANY = "deduplicate_by_name_and_company"
     STRIKETHROUGH_APPLIED_VAC = "strikethrough_applied_vac"
     STRIKETHROUGH_APPLIED_VAC_NAME = "strikethrough_applied_vac_name"
+    AUTO_RAISE_RESUME = "auto_raise_resume"
     THEME = "theme"
     VACANCY_LEFT_PANE_PERCENT = "vacancy_left_pane_percent"
     VACANCY_COL_INDEX_WIDTH = "vacancy_col_index_width"

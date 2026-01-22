@@ -520,6 +520,16 @@ class HHApiClient:
         }
         return self._request("GET", f"/vacancies/{vacancy_id}", params=params)
 
+    def get_resume_details(self, resume_id: str):
+        params = {"with_professional_roles": "true", "with_creds": "true"}
+        return self._request("GET", f"/resumes/{resume_id}", params=params)
+
+    def publish_resume(self, resume_id: str, *, hhtm_source: str | None = "resume_renewal") -> None:
+        params = {"with_professional_roles": "true"}
+        if hhtm_source:
+            params["hhtmSource"] = hhtm_source
+        self._request("POST", f"/resumes/{resume_id}/publish", params=params)
+
     def get_dictionaries(self):
         """Запрашивает общие справочники hh.ru."""
         log_to_db("INFO", LogSource.API_CLIENT, "Запрос общих справочников...")

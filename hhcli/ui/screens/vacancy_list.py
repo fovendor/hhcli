@@ -670,7 +670,10 @@ class VacancyListScreen(Screen):
 
     def action_edit_config(self) -> None:
         """Открывает экран редактирования конфигурации из списка вакансий"""
-        self.app.push_screen(ConfigScreen(), self._on_config_screen_closed)
+        self.app.push_screen(
+            ConfigScreen(resume_id=self.resume_id, resume_title=self.resume_title),
+            self._on_config_screen_closed,
+        )
 
     def action_open_history(self) -> None:
         """Открывает историю откликов для текущего резюме"""

@@ -99,6 +99,7 @@ def get_default_config() -> dict[str, Any]:
         ConfigKeys.DEDUPLICATE_BY_NAME_AND_COMPANY: True,
         ConfigKeys.STRIKETHROUGH_APPLIED_VAC: True,
         ConfigKeys.STRIKETHROUGH_APPLIED_VAC_NAME: True,
+        ConfigKeys.AUTO_RAISE_RESUME: False,
         ConfigKeys.THEME: "hhcli-base",
         ConfigKeys.VACANCY_LEFT_PANE_PERCENT: 57,
         ConfigKeys.VACANCY_COL_INDEX_WIDTH: 6,
@@ -143,6 +144,7 @@ profile_configs = Table(
     Column("strikethrough_applied_vac", Boolean, nullable=False, default=True),
     Column("strikethrough_applied_vac_name", Boolean, nullable=False,
            default=True),
+    Column("auto_raise_resume", Boolean, nullable=False, default=False),
     Column("vacancy_left_pane_percent", Integer, nullable=False, server_default="60"),
     Column("vacancy_col_index_width", Integer, nullable=False, server_default="6"),
     Column("vacancy_col_title_width", Integer, nullable=False, server_default="46"),
@@ -611,13 +613,16 @@ def ensure_schema_upgrades() -> None:
             ("history_col_sent_width", defaults[ConfigKeys.HISTORY_COL_SENT_WIDTH]),
             ("history_col_date_width", defaults[ConfigKeys.HISTORY_COL_DATE_WIDTH]),
         ]
+        bool_columns = [
+            ("auto_raise_resume", defaults[ConfigKeys.AUTO_RAISE_RESUME]),
+        ]
 
         added_columns: set[str] = set()
-        combined_columns = percent_columns + width_columns
+        combined_columns = percent_columns + width_columns + bool_columns
         for column_name, default_value in combined_columns:
             if column_name not in columns:
                 connection.execute(
-                    sa_text(f"ALTER TABLE profile_configs ADD COLUMN {column_name} INTEGER")
+                    sa_text(f"ALTER TABLE profile_configs ADD COLUMN {column_name} { 'INTEGER' }")
                 )
                 connection.execute(
                     sa_text(
@@ -1265,6 +1270,7 @@ def load_profile_config(profile_name: str) -> dict:
         config.setdefault(ConfigKeys.THEME, defaults[ConfigKeys.THEME])
         for key in LAYOUT_WIDTH_KEYS:
             config.setdefault(key, defaults[key])
+        config.setdefault(ConfigKeys.AUTO_RAISE_RESUME, defaults[ConfigKeys.AUTO_RAISE_RESUME])
 
         stmt_pos_keywords = select(config_positive_keywords.c.keyword).where(
             config_positive_keywords.c.profile_name == profile_name)

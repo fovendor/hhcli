@@ -63,7 +63,7 @@ class SearchModeScreen(Screen):
 
     def action_edit_config(self) -> None:
         """Открывает экран редактирования конфигурации"""
-        self.app.push_screen(ConfigScreen())
+        self.app.push_screen(ConfigScreen(self.resume_id, self.resume_title))
 
     def on_screen_resume(self) -> None:
         self.app.apply_theme_from_profile(self.app.client.profile_name)
