@@ -78,6 +78,129 @@ class RoleOption:
     search_text: str
 
 
+
+
+TIMER_GLYPHS: dict[str, list[str]] = {
+    " ": [
+        "            ",
+        "            ",
+        "            ",
+        "            ",
+        "            ",
+        "            ",
+        "            ",
+    ],
+    "-": [
+        "                  ",
+        "                  ",
+        "                  ",
+        "██████████████████",
+        "██████████████████",
+        "                  ",
+        "                  ",
+    ],
+    "0": [
+        "██████████████████",
+        "██              ██",
+        "██              ██",
+        "██              ██",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+    ],
+    "1": [
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+    ],
+    "2": [
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "██████████████████",
+        "██                ",
+        "██                ",
+        "██████████████████",
+    ],
+    "3": [
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "██████████████████",
+    ],
+    "4": [
+        "██              ██",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "                ██",
+    ],
+    "5": [
+        "██████████████████",
+        "██                ",
+        "██                ",
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "██████████████████",
+    ],
+    "6": [
+        "██████████████████",
+        "██                ",
+        "██                ",
+        "██████████████████",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+    ],
+    "7": [
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+        "                ██",
+    ],
+    "8": [
+        "██████████████████",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+    ],
+    "9": [
+        "██████████████████",
+        "██              ██",
+        "██              ██",
+        "██████████████████",
+        "                ██",
+        "                ██",
+        "██████████████████",
+    ],
+    ":": [
+        "          ",
+        "    ██    ",
+        "          ",
+        "          ",
+        "    ██    ",
+        "          ",
+        "          ",
+    ],
+}
+
+
 @dataclass(frozen=True)
 class LayoutField:
     label: str
@@ -482,36 +605,42 @@ class ConfigScreen(Screen):
                 yield Input(id="period", placeholder="3")
 
                 yield Static("Переключатели", classes="header")
-                yield Horizontal(
-                    Switch(id="skip_applied_in_same_company"),
-                    Label("Пропускать компании, куда уже был отклик", classes="switch-label"),
-                    classes="switch-container",
-                )
-                yield Horizontal(
-                    Switch(id="deduplicate_by_name_and_company"),
-                    Label("Убирать дубли по 'Название+Компания'", classes="switch-label"),
-                    classes="switch-container",
-                )
-                yield Horizontal(
-                    Switch(id="strikethrough_applied_vac"),
-                    Label("Зачеркивать вакансии по точному ID", classes="switch-label"),
-                    classes="switch-container",
-                )
-                yield Horizontal(
-                    Switch(id="strikethrough_applied_vac_name"),
-                    Label("Зачеркивать вакансии по 'Название+Компания'", classes="switch-label"),
-                    classes="switch-container",
-                )
-                yield Horizontal(
-                    Switch(id="auto_raise_resume"),
-                    Label("Поднимать резюме автоматически", classes="switch-label"),
-                    classes="switch-container",
-                )
-
-                yield Static("Поднятие резюме", classes="header")
-                yield Static("", id="resume_raise_status", classes="raise-status")
-                with Horizontal(classes="raise-actions"):
-                    yield Button("Поднять сейчас", id="raise_now_btn")
+                with Horizontal(id="switches-block", classes="switches-block"):
+                    with Vertical(id="switches-list", classes="switches-list"):
+                        yield Horizontal(
+                            Switch(id="skip_applied_in_same_company"),
+                            Label("Пропускать компании, куда уже был отклик", classes="switch-label"),
+                            classes="switch-container",
+                        )
+                        yield Horizontal(
+                            Switch(id="deduplicate_by_name_and_company"),
+                            Label("Убирать дубли по 'Название+Компания'", classes="switch-label"),
+                            classes="switch-container",
+                        )
+                        yield Horizontal(
+                            Switch(id="strikethrough_applied_vac"),
+                            Label("Зачеркивать вакансии по точному ID", classes="switch-label"),
+                            classes="switch-container",
+                        )
+                        yield Horizontal(
+                            Switch(id="strikethrough_applied_vac_name"),
+                            Label("Зачеркивать вакансии по 'Название+Компания'", classes="switch-label"),
+                            classes="switch-container",
+                        )
+                        yield Horizontal(
+                            Switch(id="auto_raise_resume"),
+                            Label("Поднимать резюме автоматически", classes="switch-label"),
+                            classes="switch-container",
+                        )
+                    with Vertical(id="auto_raise_panel", classes="raise-timer-panel"):
+                        yield Static("Автоподнятие резюме", classes="raise-timer-title")
+                        yield Static("", id="auto_raise_status", classes="raise-timer-status")
+                        yield Static(
+                            self._render_big_time("--:--"),
+                            id="auto_raise_timer",
+                            classes="raise-timer-display",
+                        )
+                        yield Static("", id="auto_raise_hint", classes="raise-timer-hint")
 
                 yield Static("Оформление", classes="header")
                 yield Label("Тема интерфейса:")
@@ -663,10 +792,10 @@ class ConfigScreen(Screen):
         self._initial_theme_name = current_theme_name
         self._preview_theme_name = current_theme_name
         self._theme_committed = False
-        self._refresh_raise_state()
         self._populate_layout_settings(config, defaults)
         self._initial_config = self._current_form_config()
         self._form_loaded = True
+        self._refresh_raise_state()
 
     def _update_area_summary(self) -> None:
         summary_widget = self.query_one("#area_summary", Static)
@@ -816,8 +945,6 @@ class ConfigScreen(Screen):
             self._open_area_picker()
         elif event.button.id == "roles_picker":
             self._open_roles_picker()
-        elif event.button.id == "raise_now_btn":
-            self._publish_now()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id != "theme":
@@ -825,6 +952,10 @@ class ConfigScreen(Screen):
         if not self._form_loaded:
             return
         self._apply_theme_preview(event.value)
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        if event.switch.id == "auto_raise_resume" and self._form_loaded:
+            self._refresh_raise_state()
 
     def _open_area_picker(self) -> None:
         if not self._areas:
@@ -871,12 +1002,20 @@ class ConfigScreen(Screen):
         """Собирает данные с формы и сохраняет их в базе"""
         profile_name = self.app.client.profile_name
         config = self._current_form_config()
+        auto_raise_was_enabled = bool(self._initial_config.get(ConfigKeys.AUTO_RAISE_RESUME, False))
+        auto_raise_enabled_now = bool(config.get(ConfigKeys.AUTO_RAISE_RESUME, False))
+        auto_raise_activated = auto_raise_enabled_now and not auto_raise_was_enabled
 
         save_profile_config(profile_name, config)
         self.app.apply_theme_from_profile(profile_name)
         self._theme_committed = True
         self._initial_theme_name = self.app.css_manager.theme._name
         self._preview_theme_name = self._initial_theme_name
+        self._initial_config = config
+        if auto_raise_activated and self.resume_id:
+            self._auto_publish_resume(trigger="save")
+        else:
+            self._refresh_raise_state()
         self.app.notify("Настройки успешно сохранены.", title="Успех", severity="information")
         self.dismiss(True)
 
@@ -892,28 +1031,105 @@ class ConfigScreen(Screen):
             self._revert_theme_preview()
         super().dismiss(result)
 
-    def _refresh_raise_state(self) -> None:
+    def _render_big_time(self, text: str) -> str:
+        glyphs = [TIMER_GLYPHS.get(char, TIMER_GLYPHS[" "]) for char in text]
+        if not glyphs:
+            return ""
+
+        base_width = len(glyphs[0][0])
+        base_height = len(glyphs[0])
+        spacing = 2
+
+        available_width = max(40, getattr(self.size, "width", 0) - 8)
+        available_height = max(10, getattr(self.size, "height", 0) // 3)
         try:
-            status = self.query_one("#resume_raise_status", Static)
+            timer = self.query_one("#auto_raise_timer", Static)
+            available_width = max(available_width, getattr(timer.size, "width", 0) or 0)
+            available_height = max(available_height, getattr(timer.size, "height", 0) or 0)
         except Exception:
-            status = None
+            pass
+
+        def fits(scale: int) -> bool:
+            total_width = len(glyphs) * (base_width * scale) + (len(glyphs) - 1) * (spacing * scale)
+            total_height = base_height * scale
+            return total_width <= available_width and total_height <= available_height
+
+        scale = 1
+        for candidate in (3, 2, 1):
+            if fits(candidate):
+                scale = candidate
+                break
+
+        scaled_rows: list[str] = []
+        separator = " " * (spacing * scale)
+        for row_parts in zip(*glyphs):
+            stretched = separator.join("".join(ch * scale for ch in part) for part in row_parts)
+            for _ in range(scale):
+                scaled_rows.append(stretched)
+
+        return "\n".join(scaled_rows)
+
+    def _render_big_time_from_seconds(self, seconds: int | None) -> str:
+        return self._render_big_time(self._format_remaining(seconds))
+
+    def _auto_raise_current_value(self) -> bool:
         try:
-            btn = self.query_one("#raise_now_btn", Button)
+            return bool(self.query_one("#auto_raise_resume", Switch).value)
         except Exception:
-            btn = None
-        if not self.resume_id:
-            if status:
-                status.update("Резюме не выбрано.")
-            if btn:
-                btn.disabled = True
+            return False
+
+    def _auto_raise_committed_value(self) -> bool:
+        return bool(self._initial_config.get(ConfigKeys.AUTO_RAISE_RESUME, False))
+
+    def _auto_raise_toggle_dirty(self) -> bool:
+        return self._auto_raise_current_value() != self._auto_raise_committed_value()
+
+    def _auto_raise_is_active(self) -> bool:
+        return bool(self.resume_id) and self._auto_raise_committed_value()
+
+    def _update_raise_card(self, status: str, remaining: int | None, *, hint: str | None = None) -> None:
+        try:
+            timer = self.query_one("#auto_raise_timer", Static)
+            status_label = self.query_one("#auto_raise_status", Static)
+            hint_label = self.query_one("#auto_raise_hint", Static)
+        except Exception:
             return
-        if status:
-            status.update("Обновляем статус резюме...")
-        if btn:
-            btn.disabled = True
+        timer.update(self._render_big_time_from_seconds(remaining))
+        status_label.update(status)
+        hint_label.update(hint or "")
+
+    def _stop_raise_timer(self) -> None:
+        if self._raise_timer:
+            self._raise_timer.stop()
+            self._raise_timer = None
+
+    def _refresh_raise_state(self) -> None:
+        self._stop_raise_timer()
+        if not self.resume_id:
+            self._remaining_seconds = 0
+            self._update_raise_card("Резюме не выбрано.", None, hint="Выберите резюме, чтобы включить автоподнятие.")
+            return
+
+        if self._auto_raise_toggle_dirty():
+            hint = (
+                "Сохраните настройки, чтобы включить автоподнятие."
+                if self._auto_raise_current_value()
+                else "Сохраните настройки, чтобы отключить автоподнятие."
+            )
+            self._update_raise_card("Изменения не сохранены.", None, hint=hint)
+            return
+
+        if not self._auto_raise_is_active():
+            self._remaining_seconds = 0
+            self._update_raise_card("Автоподнятие выключено.", None, hint="Включите переключатель и сохраните настройки.")
+            return
+
+        self._update_raise_card("Обновляем статус резюме...", None)
         self.run_worker(self._raise_state_worker(), thread=True, exclusive=False)
 
     async def _raise_state_worker(self):
+        if not self.resume_id:
+            return
         try:
             data = self.app.client.get_resume_details(self.resume_id)
             next_raw = data.get("next_publish_at")
@@ -926,98 +1142,114 @@ class ConfigScreen(Screen):
             self.app.call_from_thread(self._apply_raise_state, remaining, bool(can_publish))
         except AuthorizationPending:
             self.app.call_from_thread(
-                self.app.notify,
-                "Требуется повторная авторизация для статуса резюме.",
-                severity="warning",
-                timeout=4,
+                self._update_raise_card,
+                "Требуется авторизация для автоподнятия.",
+                None,
+                hint="Войдите заново и сохраните настройки.",
             )
         except Exception as exc:
             self.app.call_from_thread(
-                self.app.notify,
+                self._update_raise_card,
                 f"Ошибка статуса резюме: {exc}",
-                severity="error",
-                timeout=4,
+                None,
+                hint="Проверьте соединение и попробуйте снова.",
             )
             self.app.call_from_thread(self._apply_raise_state, 0, False)
 
     def _apply_raise_state(self, remaining: int, can_publish: bool) -> None:
-        self._remaining_seconds = remaining
-        self._publish_in_progress = False
-        try:
-            status = self.query_one("#resume_raise_status", Static)
-        except Exception:
-            status = None
-        try:
-            btn = self.query_one("#raise_now_btn", Button)
-        except Exception:
-            btn = None
-        if not status or not btn:
+        self._remaining_seconds = max(0, remaining)
+        if not self.resume_id:
+            self._stop_raise_timer()
+            self._update_raise_card("Резюме не выбрано.", None, hint="Выберите резюме, чтобы включить автоподнятие.")
             return
+
+        if self._auto_raise_toggle_dirty():
+            self._stop_raise_timer()
+            hint = (
+                "Сохраните настройки, чтобы включить автоподнятие."
+                if self._auto_raise_current_value()
+                else "Сохраните настройки, чтобы отключить автоподнятие."
+            )
+            self._update_raise_card("Изменения не сохранены.", None, hint=hint)
+            return
+
+        if not self._auto_raise_is_active():
+            self._stop_raise_timer()
+            self._update_raise_card("Автоподнятие выключено.", None, hint="Включите переключатель и сохраните настройки.")
+            return
+
         if not can_publish:
-            status.update("Поднятие недоступно.")
-            btn.disabled = True
+            self._publish_in_progress = False
+            if self._remaining_seconds > 0:
+                self._update_raise_card(
+                    f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
+                    self._remaining_seconds,
+                )
+                self._start_raise_timer()
+            else:
+                self._stop_raise_timer()
+                self._update_raise_card("Поднятие недоступно для выбранного резюме.", None)
             return
-        if remaining <= 0:
-            status.update("Можно поднять сейчас.")
-            btn.disabled = False
-            if self._raise_timer:
-                self._raise_timer.stop()
-                self._raise_timer = None
-        else:
-            status.update(f"Доступно через {self._format_remaining(remaining)}")
-            btn.disabled = True
-            self._start_raise_timer()
+
+        if self._remaining_seconds <= 0:
+            if self._publish_in_progress:
+                self._update_raise_card("Поднимаем резюме...", 0)
+                return
+            self._update_raise_card("Поднимаем резюме...", 0)
+            self._auto_publish_resume(trigger="state")
+            return
+
+        self._update_raise_card(
+            f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
+            self._remaining_seconds,
+        )
+        self._start_raise_timer()
 
     def _start_raise_timer(self) -> None:
-        if self._raise_timer:
-            self._raise_timer.stop()
+        self._stop_raise_timer()
         if self._remaining_seconds <= 0:
             return
         self._raise_timer = self.set_interval(1.0, self._on_raise_tick, pause=False)
 
     def _on_raise_tick(self) -> None:
         if self._remaining_seconds <= 0:
-            if self._raise_timer:
-                self._raise_timer.stop()
-                self._raise_timer = None
+            self._stop_raise_timer()
             self._apply_raise_state(0, True)
             return
         self._remaining_seconds = max(0, self._remaining_seconds - 1)
-        try:
-            status = self.query_one("#resume_raise_status", Static)
-        except Exception:
-            status = None
-        if status:
-            status.update(f"Доступно через {self._format_remaining(self._remaining_seconds)}")
+        self._update_raise_card(
+            f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
+            self._remaining_seconds,
+        )
 
-    def _format_remaining(self, seconds: int) -> str:
-        seconds = max(0, seconds)
+    def _format_remaining(self, seconds: int | None) -> str:
+        if seconds is None or seconds < 0:
+            return "--:--"
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
 
-    def _publish_now(self) -> None:
+    def _auto_publish_resume(self, *, trigger: str = "auto") -> None:
         if self._publish_in_progress or not self.resume_id:
             return
         self._publish_in_progress = True
-        try:
-            btn = self.query_one("#raise_now_btn", Button)
-        except Exception:
-            btn = None
-        if btn:
-            btn.disabled = True
-        try:
-            status = self.query_one("#resume_raise_status", Static)
-        except Exception:
-            status = None
-        if status:
-            status.update("Поднимаем резюме...")
-        self.run_worker(self._publish_worker(), thread=True, exclusive=False)
+        log_to_db(
+            "INFO",
+            LogSource.CONFIG_SCREEN,
+            f"Автоподнятие резюме {self.resume_id} (trigger={trigger})",
+        )
+        self._update_raise_card("Поднимаем резюме...", 0)
+        self.run_worker(self._auto_publish_worker(trigger), thread=True, exclusive=False)
 
-    async def _publish_worker(self):
+    async def _auto_publish_worker(self, trigger: str):
         try:
             self.app.client.publish_resume(self.resume_id)
-            self.app.call_from_thread(self.app.notify, "Резюме поднято", title="Поднятие", timeout=2)
+            self.app.call_from_thread(
+                self.app.notify,
+                "Резюме поднято автоматически",
+                title="Автоподнятие",
+                timeout=2,
+            )
         except AuthorizationPending:
             self.app.call_from_thread(
                 self.app.notify,
@@ -1033,7 +1265,11 @@ class ConfigScreen(Screen):
                 timeout=4,
             )
         finally:
-            self.app.call_from_thread(self._refresh_raise_state)
+            self.app.call_from_thread(self._on_auto_publish_finished)
+
+    def _on_auto_publish_finished(self) -> None:
+        self._publish_in_progress = False
+        self._refresh_raise_state()
 
 
 def _parse_iso(value: str | None) -> datetime | None:
