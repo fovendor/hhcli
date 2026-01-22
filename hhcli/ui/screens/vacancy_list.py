@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import html2text
+from datetime import datetime
 from typing import Iterable, Optional
 
 from rich.text import Text
@@ -21,6 +22,9 @@ from ...database import (
     get_vacancy_from_cache,
     load_profile_config,
     log_to_db,
+    extract_stats_from_response,
+    merge_vacancy_stats,
+    should_refresh_stats,
     save_vacancy_to_cache,
 )
 from ..dialogs.apply_confirmation import ApplyConfirmationDialog
@@ -74,6 +78,7 @@ class VacancyListScreen(Screen):
         self.resume_title = (resume_title or "").strip()
         self.selected_vacancies: set[str] = set()
         self._pending_details_id: Optional[str] = None
+        self._stats_timer: Optional[Timer] = None
         self.current_page = 0
         self.total_pages = 1
         self.search_mode = search_mode
@@ -424,6 +429,9 @@ class VacancyListScreen(Screen):
     def load_vacancy_details(self, vacancy_id: Optional[str]) -> None:
         if not vacancy_id:
             return
+        if self._stats_timer:
+            self._stats_timer.stop()
+            self._stats_timer = None
         self._pending_details_id = vacancy_id
         log_to_db("INFO", LogSource.VACANCY_LIST_SCREEN,
                   f"Просмотр деталей: {vacancy_id}")
@@ -435,6 +443,12 @@ class VacancyListScreen(Screen):
             log_to_db("INFO", LogSource.CACHE, f"Кэш попадание: {vacancy_id}")
             set_loader_visible(self, "vacancy_loader", False)
             self.display_vacancy_details(cached, vacancy_id)
+            # Стартуем немедленный фоновой рефреш, чтобы показать актуальные цифры.
+            self.run_worker(
+                self._refresh_stats_worker(vacancy_id, force=True),
+                exclusive=False,
+                thread=True,
+            )
             return
 
         log_to_db("INFO", LogSource.CACHE,
@@ -449,9 +463,17 @@ class VacancyListScreen(Screen):
     async def fetch_vacancy_details(self, vacancy_id: str) -> None:
         try:
             details = self.app.client.get_vacancy_details(vacancy_id)
+            responses, viewing = extract_stats_from_response(details)
+            details = merge_vacancy_stats(details, responses, viewing)
             save_vacancy_to_cache(vacancy_id, details)
             self.app.call_from_thread(
                 self.display_vacancy_details, details, vacancy_id
+            )
+            # Даже если API деталей не вернул counters, сразу дергаем stats-эндпоинт.
+            self.run_worker(
+                self._refresh_stats_worker(vacancy_id, force=True),
+                exclusive=False,
+                thread=True,
             )
         except AuthorizationPending as auth_exc:
             log_to_db(
@@ -494,6 +516,23 @@ class VacancyListScreen(Screen):
         if self._pending_details_id != vacancy_id:
             return
 
+        meta = (details or {}).get("_hhcli_meta") or {}
+        responses_count = meta.get("responses_count") or details.get("responses_count")
+        viewing_count = (
+            meta.get("viewing_count")
+            or details.get("online_users_count")
+            or (details.get("counters") or {}).get("views")
+        )
+        stats_block = ""
+        if (responses_count is not None) or (viewing_count is not None):
+            left = responses_count if responses_count is not None else "—"
+            right = viewing_count if viewing_count is not None else "—"
+            stats_block = (
+                "| **Откликнулось** | **Смотрят сейчас** |\n"
+                "| --- | --- |\n"
+                f"| {left} | {right} |\n\n"
+            )
+
         salary_line = "**Зарплата:** N/A\n\n"
         salary_data = details.get("salary")
         if salary_data:
@@ -523,6 +562,7 @@ class VacancyListScreen(Screen):
             f"## {details['name']}\n\n"
             f"**Компания:** {details['employer']['name']}\n\n"
             f"**Ссылка:** {details['alternate_url']}\n\n"
+            f"{stats_block}"
             f"{salary_line}"
             f"**Ключевые навыки:**\n{skills_text}\n\n"
             f"**Описание:**\n\n{desc_md}\n"
@@ -530,6 +570,65 @@ class VacancyListScreen(Screen):
         self.query_one("#vacancy_details").update(doc)
         set_loader_visible(self, "vacancy_loader", False)
         self.query_one("#details_pane").scroll_home(animate=False)
+        self._schedule_stats_refresh(vacancy_id, details, meta)
+
+    def _maybe_refresh_stats(self, vacancy_id: str, details: dict) -> None:
+        if not details:
+            return
+        if not should_refresh_stats(details):
+            return
+        self.run_worker(
+            self._refresh_stats_worker(vacancy_id),
+            exclusive=False,
+            thread=True,
+        )
+
+    async def _refresh_stats_worker(self, vacancy_id: str, force: bool = False) -> None:
+        try:
+            base = get_vacancy_from_cache(vacancy_id) or {}
+            if (not force) and (not should_refresh_stats(base)):
+                return
+            stats = self.app.client.get_vacancy_stats(vacancy_id)
+            responses, viewing = extract_stats_from_response(stats)
+            merged = merge_vacancy_stats(base or stats, responses, viewing)
+            save_vacancy_to_cache(vacancy_id, merged)
+            if self._pending_details_id == vacancy_id:
+                self.app.call_from_thread(
+                    self.display_vacancy_details, merged, vacancy_id
+                )
+        except AuthorizationPending as auth_exc:
+            log_to_db(
+                "WARN",
+                LogSource.VACANCY_LIST_SCREEN,
+                f"Обновление статистики приостановлено: {auth_exc}",
+            )
+        except Exception as exc:
+            log_to_db(
+                "ERROR",
+                LogSource.VACANCY_LIST_SCREEN,
+                f"Ошибка обновления статистики {vacancy_id}: {exc}",
+            )
+
+    def _schedule_stats_refresh(self, vacancy_id: str, details: dict, meta: dict) -> None:
+        if self._pending_details_id != vacancy_id:
+            return
+        if self._stats_timer:
+            self._stats_timer.stop()
+            self._stats_timer = None
+        refresh_after = meta.get("stats_refresh_after")
+        delay = 0.1
+        if refresh_after:
+            try:
+                refresh_dt = datetime.fromisoformat(refresh_after)
+                delta = (refresh_dt - datetime.now()).total_seconds()
+                if delta > 0:
+                    delay = delta
+            except Exception:
+                delay = 0.1
+        self._stats_timer = self.set_timer(
+            delay,
+            lambda vid=vacancy_id, det=details: self._maybe_refresh_stats(vid, det),
+        )
 
     def action_toggle_select(self) -> None:
         self._toggle_current_selection()

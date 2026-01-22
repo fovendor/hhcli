@@ -1,5 +1,6 @@
 import os
 import json
+import random
 from datetime import datetime, timedelta
 from typing import Any, Sequence
 
@@ -354,6 +355,61 @@ def get_vacancy_from_cache(vacancy_id: str) -> dict | None:
         if result:
             return json.loads(result)
         return None
+
+
+def extract_stats_from_response(data: dict) -> tuple[int | None, int | None]:
+    """Достает counters для откликов/просмотров из ответа API."""
+    counters = data.get("counters") or {}
+    responses = data.get("responses_count") or counters.get("responses")
+    viewing = (
+        data.get("online_users_count")
+        or counters.get("viewing_count")
+        or counters.get("views")
+    )
+    return responses, viewing
+
+
+def merge_vacancy_stats(
+    vacancy_data: dict,
+    responses_count: int | None,
+    viewing_count: int | None,
+    *,
+    refresh_window: tuple[int, int] = (15, 50),
+) -> dict:
+    """
+    Обновляет/добавляет статистику в структуру вакансии и ставит метаданные:
+    - stats_fetched_at: ISO datetime
+    - stats_refresh_after: ISO datetime (random 15-50 секунд в будущем)
+    """
+    result = dict(vacancy_data or {})
+    meta = dict(result.get("_hhcli_meta") or {})
+
+    if responses_count is not None:
+        meta["responses_count"] = responses_count
+    if viewing_count is not None:
+        meta["viewing_count"] = viewing_count
+
+    now = datetime.now()
+    meta["stats_fetched_at"] = now.isoformat()
+    refresh_after = now + timedelta(
+        seconds=random.uniform(refresh_window[0], refresh_window[1])
+    )
+    meta["stats_refresh_after"] = refresh_after.isoformat()
+    result["_hhcli_meta"] = meta
+    return result
+
+
+def should_refresh_stats(vacancy_data: dict) -> bool:
+    """Пора ли обновить статистику по вакансии согласно метаданным."""
+    meta = (vacancy_data or {}).get("_hhcli_meta") or {}
+    refresh_after = meta.get("stats_refresh_after")
+    if not refresh_after:
+        return True
+    try:
+        refresh_dt = datetime.fromisoformat(refresh_after)
+    except Exception:
+        return True
+    return datetime.now() >= refresh_dt
 
 def _upsert_app_state(connection, key: str, value: str) -> None:
     stmt = sqlite_insert(app_state).values(key=key, value=value)

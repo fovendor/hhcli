@@ -511,6 +511,15 @@ class HHApiClient:
     def get_vacancy_details(self, vacancy_id: str):
         return self._request("GET", f"/vacancies/{vacancy_id}")
 
+    def get_vacancy_stats(self, vacancy_id: str):
+        params = {
+            "with_responses_count": "true",
+            "with_online_users_count": "true",
+            "increment_views_counter": "true",
+            "with_chat_info": "true",
+        }
+        return self._request("GET", f"/vacancies/{vacancy_id}", params=params)
+
     def get_dictionaries(self):
         """Запрашивает общие справочники hh.ru."""
         log_to_db("INFO", LogSource.API_CLIENT, "Запрос общих справочников...")
