@@ -1288,15 +1288,23 @@ def load_profile_config(profile_name: str) -> dict:
 
 def save_profile_config(profile_name: str, config: dict):
     """Сохраняет конфигурацию профиля вместе со связанными таблицами"""
+    # Работает на копии, чтобы не мутировать исходный dict вызывающего кода
+    config_copy = dict(config)
     with engine.connect() as connection, connection.begin():
-        positive_keywords = config.pop(ConfigKeys.TEXT_INCLUDE, [])
-        negative_keywords = config.pop(ConfigKeys.NEGATIVE, [])
-        role_ids = config.pop(ConfigKeys.ROLE_IDS_CONFIG, [])
-        
-        if config:
-            connection.execute(update(profile_configs).where(
-                profile_configs.c.profile_name == profile_name
-            ).values(**config))
+        positive_keywords = config_copy.pop(ConfigKeys.TEXT_INCLUDE, [])
+        negative_keywords = config_copy.pop(ConfigKeys.NEGATIVE, [])
+        role_ids = config_copy.pop(ConfigKeys.ROLE_IDS_CONFIG, [])
+
+        if config_copy:
+            result = connection.execute(
+                update(profile_configs)
+                .where(profile_configs.c.profile_name == profile_name)
+                .values(**config_copy)
+            )
+            if result.rowcount == 0:
+                # Конфиг-профиля отсутствует (например, миграция/старый профиль) — создаём запись
+                config_copy["profile_name"] = profile_name
+                connection.execute(insert(profile_configs).values(**config_copy))
 
         connection.execute(delete(config_positive_keywords).where(
             config_positive_keywords.c.profile_name == profile_name))

@@ -34,6 +34,10 @@ from ...reference_data import ensure_reference_data
 from ...constants import ConfigKeys, LogSource
 
 COLUMN_WIDTH_MAX = 200
+MIN_WINDOW_COLS = 160
+# Ориентир ширины таймера при минимальной ширине окна. При 160 колонках реальной панели хватает ~100 символов.
+MIN_TIMER_AVAILABLE_WIDTH = 104
+MIN_TIMER_AVAILABLE_HEIGHT = 21
 
 
 def _normalize(text: str | None) -> str:
@@ -1036,21 +1040,47 @@ class ConfigScreen(Screen):
         if not glyphs:
             return ""
 
-        base_width = len(glyphs[0][0])
+        glyph_widths = [len(glyph[0]) for glyph in glyphs]
         base_height = len(glyphs[0])
         spacing = 2
 
-        available_width = max(40, getattr(self.size, "width", 0) - 8)
-        available_height = max(10, getattr(self.size, "height", 0) // 3)
+        timer_width = 0
+        timer_height = 0
         try:
             timer = self.query_one("#auto_raise_timer", Static)
-            available_width = max(available_width, getattr(timer.size, "width", 0) or 0)
-            available_height = max(available_height, getattr(timer.size, "height", 0) or 0)
+            region = getattr(timer, "content_region", None)
+            if region:
+                timer_width = getattr(region, "width", 0) or 0
+                timer_height = getattr(region, "height", 0) or 0
+            else:
+                timer_width = getattr(timer.size, "width", 0) or 0
+                timer_height = getattr(timer.size, "height", 0) or 0
         except Exception:
             pass
 
+        if timer_width:
+            available_width = timer_width
+        else:
+            try:
+                available_width = getattr(timer.size, "width", 0)
+            except Exception:
+                available_width = 0
+
+        if timer_height:
+            available_height = timer_height
+        else:
+            try:
+                available_height = getattr(timer.size, "height", 0)
+            except Exception:
+                available_height = 0
+
+        window_width = getattr(self.app.size, "width", 0) if self.app else 0
+        if window_width and window_width < MIN_WINDOW_COLS:
+            available_width = max(available_width, MIN_TIMER_AVAILABLE_WIDTH)
+            available_height = max(available_height, MIN_TIMER_AVAILABLE_HEIGHT)
+
         def fits(scale: int) -> bool:
-            total_width = len(glyphs) * (base_width * scale) + (len(glyphs) - 1) * (spacing * scale)
+            total_width = sum(width * scale for width in glyph_widths) + (len(glyphs) - 1) * (spacing * scale)
             total_height = base_height * scale
             return total_width <= available_width and total_height <= available_height
 
@@ -1071,6 +1101,16 @@ class ConfigScreen(Screen):
 
     def _render_big_time_from_seconds(self, seconds: int | None) -> str:
         return self._render_big_time(self._format_remaining(seconds))
+
+    def _apply_timer_alignment(self, timer: Static) -> None:
+        """Меняет выравнивание таймера в зависимости от ширины окна."""
+        window_width = getattr(self.app.size, "width", 0) if self.app else 0
+        if window_width and window_width <= MIN_WINDOW_COLS:
+            timer.styles.text_align = "left"
+            timer.styles.content_align = ("left", "middle")
+        else:
+            timer.styles.text_align = "center"
+            timer.styles.content_align = ("center", "middle")
 
     def _auto_raise_current_value(self) -> bool:
         try:
@@ -1094,6 +1134,7 @@ class ConfigScreen(Screen):
             hint_label = self.query_one("#auto_raise_hint", Static)
         except Exception:
             return
+        self._apply_timer_alignment(timer)
         timer.update(self._render_big_time_from_seconds(remaining))
         status_label.update(status)
         hint_label.update(hint or "")

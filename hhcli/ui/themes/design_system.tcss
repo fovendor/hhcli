@@ -505,6 +505,10 @@ Switch:hover {
     text-style: bold;
     text-align: center;
     content-align: center middle;
+    text-wrap: nowrap;
+    overflow: hidden;
+    width: 100%;
+    min-width: 104;
     height: 18;
     min-height: 18;
     padding: 1 0;
