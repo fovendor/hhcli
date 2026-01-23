@@ -465,6 +465,7 @@ class ConfigScreen(Screen):
         self._next_publish_at: datetime | None = None
         self._remaining_seconds: int = 0
         self._publish_in_progress: bool = False
+        self._ui_raise_timer: Timer | None = None
         self._quit_binding_q = None
         self._quit_binding_cyrillic = None
         self._areas: list[AreaOption] = []
@@ -672,6 +673,8 @@ class ConfigScreen(Screen):
         self._quit_binding_q = bindings_map.key_to_bindings.pop("q", None)
         self._quit_binding_cyrillic = bindings_map.key_to_bindings.pop("й", None)
         self._refresh_raise_state()
+        # запускаем локальное обновление UI таймера по состоянию сервиса в приложении
+        self._ui_raise_timer = self.set_interval(1.0, self._refresh_raise_state, pause=False)
 
         self.run_worker(self._load_data_worker, thread=True)
 
@@ -682,9 +685,9 @@ class ConfigScreen(Screen):
             bindings_map.key_to_bindings['q'] = self._quit_binding_q
         if self._quit_binding_cyrillic:
             bindings_map.key_to_bindings['й'] = self._quit_binding_cyrillic
-        if self._raise_timer:
-            self._raise_timer.stop()
-            self._raise_timer = None
+        if self._ui_raise_timer:
+            self._ui_raise_timer.stop()
+            self._ui_raise_timer = None
 
     def _load_data_worker(self) -> None:
         """Работает в фоне и загружает данные, не взаимодействуя с виджетами"""
@@ -1016,10 +1019,12 @@ class ConfigScreen(Screen):
         self._initial_theme_name = self.app.css_manager.theme._name
         self._preview_theme_name = self._initial_theme_name
         self._initial_config = config
-        if auto_raise_activated and self.resume_id:
-            self._auto_publish_resume(trigger="save")
-        else:
-            self._refresh_raise_state()
+        if self.resume_id:
+            if auto_raise_enabled_now:
+                self.app._start_auto_raise_service(self.resume_id, self.resume_title or "")
+            else:
+                self.app._stop_auto_raise_service()
+        self._refresh_raise_state()
         self.app.notify("Настройки успешно сохранены.", title="Успех", severity="information")
         self.dismiss(True)
 
@@ -1145,9 +1150,8 @@ class ConfigScreen(Screen):
             self._raise_timer = None
 
     def _refresh_raise_state(self) -> None:
-        self._stop_raise_timer()
+        # Обновляем карточку по состоянию фонового сервиса автоподнятия в приложении
         if not self.resume_id:
-            self._remaining_seconds = 0
             self._update_raise_card("Резюме не выбрано.", None, hint="Выберите резюме, чтобы включить автоподнятие.")
             return
 
@@ -1160,108 +1164,42 @@ class ConfigScreen(Screen):
             self._update_raise_card("Изменения не сохранены.", None, hint=hint)
             return
 
-        if not self._auto_raise_is_active():
-            self._remaining_seconds = 0
-            self._update_raise_card("Автоподнятие выключено.", None, hint="Включите переключатель и сохраните настройки.")
-            return
-
-        self._update_raise_card("Обновляем статус резюме...", None)
-        self.run_worker(self._raise_state_worker(), thread=True, exclusive=False)
-
-    async def _raise_state_worker(self):
-        if not self.resume_id:
-            return
+        state = {}
         try:
-            data = self.app.client.get_resume_details(self.resume_id)
-            next_raw = data.get("next_publish_at")
-            can_publish = data.get("can_publish_or_update", True)
-            next_dt = _parse_iso(next_raw)
-            remaining = 0
-            if next_dt:
-                delta = next_dt - datetime.now(tz=next_dt.tzinfo)
-                remaining = max(0, int(delta.total_seconds()))
-            self.app.call_from_thread(self._apply_raise_state, remaining, bool(can_publish))
-        except AuthorizationPending:
-            self.app.call_from_thread(
-                self._update_raise_card,
-                "Требуется авторизация для автоподнятия.",
-                None,
-                hint="Войдите заново и сохраните настройки.",
-            )
-        except Exception as exc:
-            self.app.call_from_thread(
-                self._update_raise_card,
-                f"Ошибка статуса резюме: {exc}",
-                None,
-                hint="Проверьте соединение и попробуйте снова.",
-            )
-            self.app.call_from_thread(self._apply_raise_state, 0, False)
+            state = self.app.get_auto_raise_state()
+        except Exception:
+            state = {}
 
-    def _apply_raise_state(self, remaining: int, can_publish: bool) -> None:
-        self._remaining_seconds = max(0, remaining)
-        if not self.resume_id:
-            self._stop_raise_timer()
-            self._update_raise_card("Резюме не выбрано.", None, hint="Выберите резюме, чтобы включить автоподнятие.")
-            return
+        enabled = bool(state.get("enabled"))
+        remaining = state.get("remaining")
+        in_progress = bool(state.get("in_progress"))
+        can_publish = state.get("can_publish", True)
 
-        if self._auto_raise_toggle_dirty():
-            self._stop_raise_timer()
-            hint = (
-                "Сохраните настройки, чтобы включить автоподнятие."
-                if self._auto_raise_current_value()
-                else "Сохраните настройки, чтобы отключить автоподнятие."
-            )
-            self._update_raise_card("Изменения не сохранены.", None, hint=hint)
-            return
-
-        if not self._auto_raise_is_active():
-            self._stop_raise_timer()
+        if not enabled:
             self._update_raise_card("Автоподнятие выключено.", None, hint="Включите переключатель и сохраните настройки.")
             return
 
-        if not can_publish:
-            self._publish_in_progress = False
-            if self._remaining_seconds > 0:
-                self._update_raise_card(
-                    f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
-                    self._remaining_seconds,
-                )
-                self._start_raise_timer()
-            else:
-                self._stop_raise_timer()
-                self._update_raise_card("Поднятие недоступно для выбранного резюме.", None)
-            return
-
-        if self._remaining_seconds <= 0:
-            if self._publish_in_progress:
-                self._update_raise_card("Поднимаем резюме...", 0)
-                return
+        if in_progress:
             self._update_raise_card("Поднимаем резюме...", 0)
-            self._auto_publish_resume(trigger="state")
             return
 
-        self._update_raise_card(
-            f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
-            self._remaining_seconds,
-        )
-        self._start_raise_timer()
-
-    def _start_raise_timer(self) -> None:
-        self._stop_raise_timer()
-        if self._remaining_seconds <= 0:
+        if remaining is None:
+            self._update_raise_card("Статус недоступен.", None, hint="Откройте настройки позже.")
             return
-        self._raise_timer = self.set_interval(1.0, self._on_raise_tick, pause=False)
 
-    def _on_raise_tick(self) -> None:
-        if self._remaining_seconds <= 0:
-            self._stop_raise_timer()
-            self._apply_raise_state(0, True)
+        if remaining > 0:
+            self._remaining_seconds = remaining
+            self._update_raise_card(
+                f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
+                self._remaining_seconds,
+            )
             return
-        self._remaining_seconds = max(0, self._remaining_seconds - 1)
-        self._update_raise_card(
-            f"Следующее поднятие через {self._format_remaining(self._remaining_seconds)}",
-            self._remaining_seconds,
-        )
+
+        # remaining <= 0
+        if can_publish:
+            self._update_raise_card("Можно поднять резюме.", 0)
+        else:
+            self._update_raise_card("Поднятие недоступно для выбранного резюме.", None)
 
     def _format_remaining(self, seconds: int | None) -> str:
         if seconds is None or seconds < 0:
@@ -1269,49 +1207,6 @@ class ConfigScreen(Screen):
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
         return f"{hours:02d}:{minutes:02d}"
-
-    def _auto_publish_resume(self, *, trigger: str = "auto") -> None:
-        if self._publish_in_progress or not self.resume_id:
-            return
-        self._publish_in_progress = True
-        log_to_db(
-            "INFO",
-            LogSource.CONFIG_SCREEN,
-            f"Автоподнятие резюме {self.resume_id} (trigger={trigger})",
-        )
-        self._update_raise_card("Поднимаем резюме...", 0)
-        self.run_worker(self._auto_publish_worker(trigger), thread=True, exclusive=False)
-
-    async def _auto_publish_worker(self, trigger: str):
-        try:
-            self.app.client.publish_resume(self.resume_id)
-            self.app.call_from_thread(
-                self.app.notify,
-                "Резюме поднято автоматически",
-                title="Автоподнятие",
-                timeout=2,
-            )
-        except AuthorizationPending:
-            self.app.call_from_thread(
-                self.app.notify,
-                "Требуется авторизация для поднятия резюме.",
-                severity="warning",
-                timeout=4,
-            )
-        except Exception as exc:
-            self.app.call_from_thread(
-                self.app.notify,
-                f"Не удалось поднять резюме: {exc}",
-                severity="error",
-                timeout=4,
-            )
-        finally:
-            self.app.call_from_thread(self._on_auto_publish_finished)
-
-    def _on_auto_publish_finished(self) -> None:
-        self._publish_in_progress = False
-        self._refresh_raise_state()
-
 
 def _parse_iso(value: str | None) -> datetime | None:
     if not value:

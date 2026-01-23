@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from requests import exceptions as req_exc
@@ -49,6 +50,13 @@ class HHCliApp(App):
         self.title = "hhcli"
         self._ctrl_c_armed: bool = False
         self._ctrl_c_reset_timer = None
+        self._auto_raise_timer = None
+        self._auto_raise_remaining: int = 0
+        self._auto_raise_resume_id: Optional[str] = None
+        self._auto_raise_resume_title: str = ""
+        self._auto_raise_can_publish: bool = True
+        self._auto_raise_enabled: bool = False
+        self._auto_raise_in_progress: bool = False
 
     def apply_theme_from_profile(self, profile_name: Optional[str] = None) -> None:
         """Применяет тему, указанную в конфигурации профиля"""
@@ -149,6 +157,7 @@ class HHCliApp(App):
         self._open_search_mode(resume_id, resume_title, is_root=True)
 
     def _open_search_mode(self, resume_id: str, resume_title: str, *, is_root: bool) -> None:
+        self._start_auto_raise_service(resume_id, resume_title)
         self.push_screen(
             SearchModeScreen(
                 resume_id=resume_id,
@@ -240,5 +249,186 @@ class HHCliApp(App):
     def _reset_ctrl_c(self) -> None:
         self._ctrl_c_armed = False
 
+
+# --- Автоподнятие резюме при старте профиля ---
+
+    def _stop_auto_raise_service(self) -> None:
+        if self._auto_raise_timer:
+            self._auto_raise_timer.stop()
+            self._auto_raise_timer = None
+        self._auto_raise_remaining = 0
+        self._auto_raise_can_publish = True
+        self._auto_raise_in_progress = False
+
+    def _start_auto_raise_service(self, resume_id: str, resume_title: str) -> None:
+        """Запускает фоновую проверку автоподнятия после выбора резюме."""
+        self._stop_auto_raise_service()
+        self._auto_raise_resume_id = resume_id
+        self._auto_raise_resume_title = resume_title or ""
+        try:
+            profile_config = load_profile_config(self.client.profile_name)
+        except Exception as exc:  # pragma: no cover
+            log_to_db("WARN", LogSource.TUI, f"Не удалось загрузить конфиг для автоподнятия: {exc}")
+            return
+        self._auto_raise_enabled = bool(profile_config.get(ConfigKeys.AUTO_RAISE_RESUME))
+        if not self._auto_raise_enabled:
+            return
+        self.run_worker(self._auto_raise_worker(resume_id, resume_title), thread=True, exclusive=False)
+
+    def _parse_iso(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            if value.endswith("Z"):
+                value = value.replace("Z", "+00:00")
+            return datetime.fromisoformat(value)
+        except Exception:
+            return None
+
+    def _format_remaining(self, seconds: int | None) -> str:
+        if seconds is None or seconds < 0:
+            return "--:--"
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        return f"{hours:02d}:{minutes:02d}"
+
+    def _format_remaining_human(self, seconds: int | None) -> str:
+        """Форматирует остаток в человеко-читаемый текст с падежами."""
+        if seconds is None or seconds < 0:
+            return "неизвестно"
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+
+        def hours_text(h: int) -> str:
+            forms = {
+                1: "1 час",
+                2: "2 часа",
+                3: "3 часа",
+                4: "4 часа",
+            }
+            return forms.get(h, "")
+
+        parts: list[str] = []
+        if hours:
+            parts.append(hours_text(hours))
+        if minutes:
+            parts.append(f"{minutes} минут")
+        if not parts:
+            parts.append("менее минуты")
+        return " ".join(parts)
+
+    async def _auto_raise_worker(self, resume_id: str, resume_title: str):
+        try:
+            data = self.client.get_resume_details(resume_id)
+            next_raw = data.get("next_publish_at")
+            can_publish = data.get("can_publish_or_update", True)
+            next_dt = self._parse_iso(next_raw)
+            remaining = 0
+            if next_dt:
+                delta = next_dt - datetime.now(tz=next_dt.tzinfo)
+                remaining = max(0, int(delta.total_seconds()))
+        except AuthorizationPending:
+            self.call_from_thread(
+                self.notify,
+                "Требуется авторизация для автоподнятия.",
+                title="Автоподнятие",
+                severity="warning",
+                timeout=4,
+            )
+            return
+        except Exception as exc:
+            log_to_db("WARN", LogSource.TUI, f"Не удалось получить статус резюме для автоподнятия: {exc}")
+            return
+
+        self._auto_raise_remaining = remaining
+        self._auto_raise_can_publish = bool(can_publish)
+        if remaining > 0:
+            human = self._format_remaining_human(remaining)
+            self.call_from_thread(
+                self.notify,
+                f"Следующее автоподнятие через {human}",
+                title=resume_title or "Автоподнятие",
+                timeout=4,
+            )
+            self.call_from_thread(self._start_auto_raise_timer)
+            return
+
+        if can_publish:
+            self.call_from_thread(self._auto_publish_resume_background, resume_id, resume_title)
+        else:
+            self.call_from_thread(
+                self.notify,
+                "Поднятие недоступно для выбранного резюме.",
+                title=resume_title or "Автоподнятие",
+                severity="warning",
+                timeout=4,
+            )
+
+    def _start_auto_raise_timer(self) -> None:
+        if self._auto_raise_timer:
+            self._auto_raise_timer.stop()
+            self._auto_raise_timer = None
+        if self._auto_raise_remaining <= 0 or not self._auto_raise_resume_id:
+            return
+        self._auto_raise_timer = self.set_interval(1.0, self._on_auto_raise_tick, pause=False)
+
+    def _on_auto_raise_tick(self) -> None:
+        if self._auto_raise_remaining <= 0:
+            self._stop_auto_raise_service()
+            if self._auto_raise_resume_id:
+                self.run_worker(
+                    self._auto_raise_worker(self._auto_raise_resume_id, ""),
+                    thread=True,
+                    exclusive=False,
+                )
+            return
+        self._auto_raise_remaining = max(0, self._auto_raise_remaining - 1)
+
+    def get_auto_raise_state(self) -> dict:
+        """Возвращает текущее состояние автоподнятия для UI."""
+        return {
+            "enabled": self._auto_raise_enabled,
+            "resume_id": self._auto_raise_resume_id,
+            "resume_title": self._auto_raise_resume_title,
+            "remaining": self._auto_raise_remaining,
+            "can_publish": self._auto_raise_can_publish,
+            "in_progress": self._auto_raise_in_progress,
+        }
+
+    def _auto_publish_resume_background(self, resume_id: str, resume_title: str) -> None:
+        def _worker():
+            self._auto_raise_in_progress = True
+            try:
+                self.client.publish_resume(resume_id)
+                self.call_from_thread(
+                    self.notify,
+                    "Резюме поднято автоматически",
+                    title=resume_title or "Автоподнятие",
+                    timeout=3,
+                )
+            except AuthorizationPending:
+                self.call_from_thread(
+                    self.notify,
+                    "Требуется авторизация для поднятия резюме.",
+                    title="Автоподнятие",
+                    severity="warning",
+                    timeout=4,
+                )
+            except Exception as exc:  # pragma: no cover
+                log_to_db("ERROR", LogSource.TUI, f"Не удалось поднять резюме автоматически: {exc}")
+                self.call_from_thread(
+                    self.notify,
+                    f"Не удалось поднять резюме: {exc}",
+                    title="Автоподнятие",
+                    severity="error",
+                    timeout=4,
+                )
+            finally:
+                self._auto_raise_in_progress = False
+                self.call_from_thread(self._stop_auto_raise_service)
+                # После публикации обновляем статус для следующего таймера
+                self.run_worker(self._auto_raise_worker(resume_id, resume_title), thread=True, exclusive=False)
+
+        self.run_worker(_worker, thread=True, exclusive=False)
 
 __all__ = ["HHCliApp", "CSS_MANAGER"]
