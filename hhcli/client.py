@@ -234,6 +234,26 @@ class HHApiClient:
         log_oauth_event(self.profile_name, "start_auth", auth_url)
         code_holder: dict[str, str] = {}
         event = threading.Event()
+        nav_hook_installed = False
+
+        def _try_capture(url: str) -> bool:
+            """Читает code из redirect_uri; True если удалось поймать и обработать."""
+            if event.is_set() or not url:
+                return False
+            if not url.startswith(REDIRECT_URI):
+                return False
+            parsed = urlsplit(url)
+            code = parse_qs(parsed.query).get("code", [None])[0]
+            if not code:
+                return False
+            code_holder["code"] = code
+            event.set()
+            log_oauth_event(self.profile_name, "code_received")
+            try:
+                window.destroy()
+            except Exception:
+                pass
+            return True
 
         def handle_loaded(*_args):
             if event.is_set():
@@ -242,17 +262,42 @@ class HHApiClient:
                 current_url = window.get_current_url() or ""
             except Exception:
                 return
-            if not current_url.startswith(REDIRECT_URI):
+            _try_capture(current_url)
+            _ensure_navigation_hook()
+
+        def _ensure_navigation_hook():
+            nonlocal nav_hook_installed
+            if nav_hook_installed:
                 return
-            parsed = urlsplit(current_url)
-            code = parse_qs(parsed.query).get("code", [None])[0]
-            if not code:
-                return
-            code_holder["code"] = code
-            event.set()
-            log_oauth_event(self.profile_name, "code_received")
             try:
-                window.destroy()
+                native = getattr(window, "native", None)
+                webview_obj = None
+                if native and hasattr(native, "webview"):
+                    webview_obj = native.webview
+                elif native and hasattr(native, "browser") and hasattr(native.browser, "webview"):
+                    webview_obj = native.browser.webview
+                if not webview_obj:
+                    return
+
+                def _nav_handler(sender, args):
+                    url = str(getattr(args, "Uri", "") or getattr(args, "uri", "") or "")
+                    if _try_capture(url):
+                        try:
+                            args.Cancel = True
+                        except Exception:
+                            pass
+
+                if hasattr(webview_obj, "NavigationStarting"):
+                    webview_obj.NavigationStarting += _nav_handler
+                    nav_hook_installed = True
+                    log_oauth_event(self.profile_name, "nav_hook_installed", "NavigationStarting")
+                    return
+
+                core = getattr(webview_obj, "CoreWebView2", None)
+                if core and hasattr(core, "NavigationStarting"):
+                    core.NavigationStarting += _nav_handler
+                    nav_hook_installed = True
+                    log_oauth_event(self.profile_name, "nav_hook_installed", "CoreWebView2.NavigationStarting")
             except Exception:
                 pass
 
@@ -269,8 +314,13 @@ class HHApiClient:
         )
         window.events.loaded += handle_loaded
 
+        # WebView2 (Windows) блокирует переход на кастомные схемы и не грузит страницу,
+        # поэтому пытаемся зацепиться за системное событие NavigationStarting (Edge).
+        _ensure_navigation_hook()
+
         def watch_redirect():
             while not event.is_set():
+                _ensure_navigation_hook()
                 try:
                     current_url = window.get_current_url() or ""
                 except Exception:

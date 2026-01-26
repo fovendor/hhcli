@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hhcli"
-version = "0.6.1"
+version = "0.6.2"
 description = "Неофициальный CLI-клиент для поиска работы и откликов на hh.ru."
 authors = ["fovendor <fovendor@gmail.com>"]
 readme = "README.md"
@@ -16,7 +16,7 @@ platformdirs = "^4.0.0"
 sqlalchemy = "^2.0.23"
 textual = "*"
 html2text = "^2025.4.15"
-pywebview = ">=4,<5"
+pywebview = ">=5,<6"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.6"
