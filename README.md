@@ -45,7 +45,7 @@ python3 -m pipx ensurepath
 #### Arch / Manjaro (pacman)
 
 ```bash
-sudo pacman -Syu python python-pip pipx git
+sudo pacman -Syu python python-pip pipx git webkit2gtk python-gobject gtk3
 pipx install hhcli --system-site-packages
 python3 -m pipx ensurepath
 # Перезапустите терминал прежде, чем запускать программу
@@ -91,7 +91,7 @@ pipx install hhcli
 ```
 
 > После установки откройте новое окно PowerShell/Command Prompt, чтобы PATH подхватил `C:\Users\<имя>\.local\bin`. Если команда `hhcli` всё ещё не находится, убедитесь, что этот путь внесён в переменные среды (Параметры → Система → Дополнительные параметры → Переменные среды) и перезапустите терминал.
-> Для рендеринга окна авторизации нужен WebView2 Runtime. Обычно он уже предустановлен в Windows 10/11. Если нет — скачайте с [сайта Microsoft](https://developer.microsoft.com/nl-nl/microsoft-edge/webview2?form=MA13LH).
+> Для рендеринга окна авторизации нужен WebView2 Runtime. Обычно он уже предустановлен в Windows 10/11. Если нет — откройте [страницу Microsoft](https://developer.microsoft.com/nl-nl/microsoft-edge/webview2?form=MA13LH) и скачайте **Evergreen Bootstrapper** (x64 для большинства ПК). При закрытом интернете — берите **Evergreen Standalone Installer** под свою архитектуру (x64/x86/ARM64). Fixed Version не требуется.
 
 #### Обновление / удаление
 
@@ -124,7 +124,7 @@ hhcli
   sudo apt install python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 libwebkit2gtk-4.1-0
   pipx install hhcli --force --system-site-packages
   ```
-- Windows 10/11: установите или обновите [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) и перезапустите терминал.
+- Windows 10/11: установите или обновите [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (рекомендуется Evergreen Bootstrapper; при оффлайн-доступе берите Evergreen Standalone Installer под x64/x86/ARM64) и перезапустите терминал.
 
 #### 2. Настройка
 

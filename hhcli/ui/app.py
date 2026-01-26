@@ -134,15 +134,25 @@ class HHCliApp(App):
                 f"Профиль '{profile_name}' требует повторной авторизации: {auth_exc}",
             )
             self.sub_title = f"Профиль: {profile_name} (ожидание авторизации)"
-            self.notify(
-                "Требуется повторная авторизация. "
-                "Завершите вход в открывшемся браузере и повторите выбор профиля.",
-                title="Авторизация",
-                severity="warning",
-                timeout=6,
-            )
-            all_profiles = get_all_profiles()
-            self.push_screen(ProfileSelectionScreen(all_profiles), self.on_profile_selected)
+            # Повторно проверяем токен после завершения окна авторизации.
+            try:
+                self.client.ensure_active_token()
+                self.notify(
+                    "Авторизация завершена, продолжаю работу с профилем.",
+                    title="Авторизация",
+                    timeout=4,
+                )
+                await self.proceed_with_profile(profile_name)
+            except AuthorizationPending:
+                self.notify(
+                    "Требуется повторная авторизация. "
+                    "Завершите вход в браузере и повторите выбор профиля.",
+                    title="Авторизация",
+                    severity="warning",
+                    timeout=6,
+                )
+                all_profiles = get_all_profiles()
+                self.push_screen(ProfileSelectionScreen(all_profiles), self.on_profile_selected)
         except Exception as exc:
             log_to_db("ERROR", LogSource.TUI, f"Критическая ошибка профиля/резюме: {exc}")
             self.exit(result=exc)

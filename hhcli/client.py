@@ -280,19 +280,7 @@ class HHApiClient:
                     break
                 time.sleep(0.2)
 
-        try:
-            webview.start(func=watch_redirect, debug=False, **webview_kwargs)
-        except WebViewException as exc:
-            # Fallback: если принудительный GUI (edgechromium) не сработал, пробуем авто-выбор.
-            if webview_kwargs.get("gui"):
-                log_to_db(
-                    "WARN",
-                    LogSource.OAUTH,
-                    f"Не удалось запустить pywebview c gui={webview_kwargs['gui']}, пробуем авто. Ошибка: {exc}",
-                )
-                webview.start(func=watch_redirect, debug=False)
-            else:
-                raise
+        webview.start(func=watch_redirect, debug=False, **webview_kwargs)
 
         if not event.is_set():
             log_to_db(
@@ -341,6 +329,9 @@ class HHApiClient:
 
     @staticmethod
     def _detect_preferred_gui() -> str | None:
+        if sys.platform.startswith("linux"):
+            # Принудительно используем WebKit2GTK и не даём откатиться на Qt/PyQt.
+            return "gtk"
         if sys.platform.startswith("win"):
             # Принудительно используем WebView2 и не даём откатиться на IE (mshtml),
             # иначе страница hh.ru может не отрабатывать.
