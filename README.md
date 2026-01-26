@@ -1,6 +1,6 @@
 # hhcli
 
-[![PyPI version](https://img.shields.io/pypi/v/hhcli.svg?cacheSeconds=3600)](https://pypi.org/project/hhcli/)
+[![PyPI version](https://img.shields.io/pypi/v/hhcli.svg?cacheSeconds=360)](https://pypi.org/project/hhcli/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Follow on Telegram](https://img.shields.io/badge/Telegram-Join-blue?logo=telegram)](https://t.me/hhcli)
 ![Total Downloads](https://static.pepy.tech/badge/hhcli)
