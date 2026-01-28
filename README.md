@@ -30,7 +30,7 @@
 ## Установка
 
 <details markdown="1" style="margin-bottom: 1.5rem;">
-<summary><h3 id="linux" style="display:inline">Linux</h3></summary>
+<summary><h3 style="display:inline">Linux</h3></summary>
 
 #### Ubuntu / Debian / Mint (apt)
 
@@ -72,7 +72,7 @@ python3 -m pipx ensurepath
 </details>
 
 <details markdown="1">
-<summary><h3 id="windows" style="display:inline">Windows</h3></summary>
+<summary><h3 style="display:inline">Windows</h3></summary>
 
 #### Установка Python и pipx
 
