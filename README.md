@@ -6,7 +6,7 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/hhcli?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=GREEN&left_text=Downloads)](https://pepy.tech/projects/hhcli)
 
 
-`hhcli` — это неофициальный CLI-клиент для поиска работы и откликов на hh.ru, позволяющий искать вакансии, просматривать их, отмечать понравившиеся и откликаться на них в интерфейсе терминала. 
+hhcli — это неофициальный CLI-клиент для поиска работы и откликов на hh.ru, позволяющий искать вакансии, просматривать их, отмечать понравившиеся и откликаться на них в интерфейсе терминала. 
 
 > У приложения есть [канал в Telegram](https://t.me/hhcli), где публикуются основные новости проекта.
 
